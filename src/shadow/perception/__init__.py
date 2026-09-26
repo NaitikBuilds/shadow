@@ -2,5 +2,11 @@
 
 from .base import PerceptionSource
 from .active_window import ActiveWindowSource, ActiveWindow
+from .screen_ocr import ScreenOCRSource
 
-__all__ = ["PerceptionSource", "ActiveWindowSource", "ActiveWindow"]
+__all__ = [
+    "PerceptionSource",
+    "ActiveWindowSource",
+    "ActiveWindow",
+    "ScreenOCRSource",
+]
