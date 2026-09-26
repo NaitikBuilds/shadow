@@ -1,5 +1,5 @@
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QCloseEvent, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -17,7 +17,7 @@ class InferenceWorker(QThread):
     """Runs the LLM in a background thread and emits streamed chunks."""
 
     chunk = Signal(str)
-    done = Signal()          # renamed from 'finished' — QThread already has that
+    done = Signal()
     failed = Signal(str)
 
     def __init__(self, backend, prompt: str, max_tokens: int):
@@ -31,6 +31,9 @@ class InferenceWorker(QThread):
             for piece in self.backend.generate_stream(
                 self.prompt, max_tokens=self.max_tokens
             ):
+                # Cooperative cancellation: exit between tokens if asked.
+                if self.isInterruptionRequested():
+                    break
                 self.chunk.emit(piece)
             self.done.emit()
         except Exception as exc:  # noqa: BLE001
@@ -44,6 +47,7 @@ class MainWindow(QMainWindow):
         self.memory = memory
         self.config = config
         self.worker = None
+        self._shutting_down = False
 
         self.setWindowTitle("SHADOW — Silent On-Device Life Context Agent")
         self.resize(900, 600)
@@ -87,16 +91,19 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.memory.log_activity("app_start", "SHADOW started")
 
+    # ---------- query flow ----------
+
     def send_query(self):
+        if self._shutting_down:
+            return
         if self.worker is not None and self.worker.isRunning():
-            return  # ignore new queries while one is running
+            return
         prompt = self.input.text().strip()
         if not prompt:
             return
         self.input.clear()
 
         self.output.append(f"<b>You:</b> {prompt}")
-        # start the assistant paragraph; chunks will be inserted after it
         self.output.append("<b>Shadow:</b> ")
 
         mode = self.mode_combo.currentText()
@@ -116,10 +123,14 @@ class MainWindow(QMainWindow):
         self.output.ensureCursorVisible()
 
     def on_done(self):
-        self.output.append("")  # trailing blank line
+        if self._shutting_down:
+            return
+        self.output.append("")
         self.memory.log_activity("query", "completed")
 
     def on_error(self, message: str):
+        if self._shutting_down:
+            return
         self.output.append(f"<b style='color:red'>Error:</b> {message}")
         self.memory.log_activity("error", message[:120])
 
@@ -127,3 +138,23 @@ class MainWindow(QMainWindow):
         self.memory.wipe()
         self.output.append("<b>Shadow:</b> All local memory wiped.")
         self.memory.log_activity("wipe", "Full Shadow wipe executed")
+
+    # ---------- graceful shutdown ----------
+
+    def closeEvent(self, event: QCloseEvent):
+        self._shutting_down = True
+
+        worker = self.worker
+        if worker is not None and worker.isRunning():
+            worker.requestInterruption()
+            if not worker.wait(3000):
+                # Still running after 3 s. We accept the close anyway;
+                # the OS reclaims the thread when the process exits.
+                print("[shadow] worker did not stop within 3 s; forcing exit")
+
+        try:
+            self.memory.log_activity("app_stop", "SHADOW closed")
+        finally:
+            self.memory.close()
+
+        event.accept()
