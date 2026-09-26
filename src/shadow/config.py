@@ -20,3 +20,46 @@ def consent_channels(config: dict) -> list[str]:
 def is_consented(config: dict, channel: str) -> bool:
     """Check whether a specific channel is consented in config."""
     return bool(config.get("consent", {}).get(channel, False))
+
+
+def perception_config(config: dict) -> dict:
+    """Return the perception block with safe defaults filled in."""
+    defaults = {
+        "enabled": True,
+        "tick_interval_sec": 30,
+        "idle_skip_sec": 120,
+        "dedupe_window_sec": 60,
+        "ocr_every_n_ticks": 3,
+        "sources": {
+            "active_window": True,
+            "screen_ocr": True,
+            "typing_dynamics": False,
+            "document_watch": False,
+            "calendar": False,
+        },
+        "max_title_length": 200,
+        "min_title_length": 3,
+    }
+    user = config.get("perception", {}) or {}
+    merged = {**defaults, **user}
+    merged["sources"] = {**defaults["sources"], **(user.get("sources") or {})}
+    return merged
+
+
+def source_enabled(config: dict, source_name: str) -> bool:
+    """Check whether a perception source is enabled in config."""
+    return bool(perception_config(config)["sources"].get(source_name, False))
+
+
+def tick_interval(config: dict, mode: str | None = None) -> int:
+    """Return the effective tick interval for a mode.
+
+    Falls back to the global perception setting if the mode doesn't
+    define one. Mode-specific overrides live under modes.<mode>.
+    """
+    p = perception_config(config)
+    if mode:
+        mode_cfg = (config.get("modes") or {}).get(mode) or {}
+        if "observation_interval_sec" in mode_cfg:
+            return int(mode_cfg["observation_interval_sec"])
+    return int(p["tick_interval_sec"])

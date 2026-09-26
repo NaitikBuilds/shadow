@@ -12,6 +12,27 @@ observation:
   default_mode: "balanced" # lite | balanced | active
   retention_days: 90 # 0 = keep forever
 
+perception:
+  enabled: true
+  tick_interval_sec: 30          # how often the observer samples
+  idle_skip_sec: 120             # skip sampling if user is idle this long
+  dedupe_window_sec: 60          # don't repeat identical observations within this window
+
+  # OCR runs on every Nth tick to save CPU (0 = disabled)
+  ocr_every_n_ticks: 3
+
+  # Which perception sources are active
+  sources:
+    active_window: true
+    screen_ocr: true
+    typing_dynamics: false
+    document_watch: false
+    calendar: false
+
+  # Guardrails
+  max_title_length: 200
+  min_title_length: 3            # ignore "untitled", empty titles, etc.  
+
 model:
   path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
   n_ctx: 4096
