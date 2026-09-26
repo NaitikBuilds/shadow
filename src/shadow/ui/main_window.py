@@ -4,6 +4,7 @@ from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.privacy_dashboard import PrivacyDashboard
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.memory.retriever import ShadowRetriever
+from shadow.perception import ObservationWorker
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,  # NEW in Commit 3
@@ -70,6 +71,12 @@ class MainWindow(QMainWindow):
         self.indicator = ObservationIndicator(self.memory, self.config)
         layout.addWidget(self.indicator)
 
+        self.observer_status = QLabel("Observer: not started")
+        self.observer_status.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(self.observer_status)
+
+        self.observer = None
+
         mode_layout = QHBoxLayout()
         mode_layout.addWidget(QLabel("Mode:"))
         self.mode_combo = QComboBox()
@@ -78,6 +85,7 @@ class MainWindow(QMainWindow):
         mode_layout.addWidget(self.mode_combo)
         mode_layout.addStretch()
         layout.addLayout(mode_layout)
+        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
 
         self.output = QTextEdit()
         self.output.setReadOnly(True)
@@ -100,6 +108,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self._build_menu()  # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
+
+        self._start_observer()
 
     # ---------- menu (NEW in Commit 3) ----------
 
@@ -149,6 +159,43 @@ class MainWindow(QMainWindow):
             "consent_change", f"{channel}={'on' if enabled else 'off'}"
         )
         self.indicator.refresh()
+
+    def _on_mode_changed(self, mode: str):
+        if self.observer is not None:
+            self.observer.set_mode(mode)
+        self.memory.log_activity("mode_change", mode)
+
+    # ---------- observer lifecycle ----------
+
+    def _start_observer(self):
+        from shadow.config import perception_config
+
+        pcfg = perception_config(self.config)
+        if not pcfg.get("enabled", True):
+            self.observer_status.setText("Observer: disabled in config")
+            return
+        self.observer = ObservationWorker(self.memory, self.backend, self.config)
+        self.observer.tick.connect(self._on_observer_tick)
+        self.observer.observation.connect(self._on_observer_observation)
+        self.observer.skipped.connect(self._on_observer_skipped)
+        self.observer.error.connect(self._on_observer_error)
+        self.observer.start()
+        self.observer_status.setText("Observer: starting…")
+        self.memory.log_activity("observer_start", "observer loop started")
+
+    def _on_observer_tick(self, count: int):
+        self.observer_status.setText(f"Observer: tick {count}")
+
+    def _on_observer_observation(self, source: str, preview: str):
+        self.observer_status.setText(f"Observer: recorded from {source}")
+        self.memory.log_activity("observation", f"{source}: {preview[:80]}")
+
+    def _on_observer_skipped(self, reason: str, detail: str):
+        self.observer_status.setText(f"Observer: skipped ({reason})")
+
+    def _on_observer_error(self, message: str):
+        self.observer_status.setText(f"Observer error: {message[:80]}")
+        self.memory.log_activity("observer_error", message[:120])
 
     # ---------- query flow ----------
 
@@ -240,6 +287,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         self._shutting_down = True
+
+        if self.observer is not None and self.observer.isRunning():
+            self.observer.stop()
+            if not self.observer.wait(3000):
+                print("[shadow] observer did not stop within 3 s")
 
         worker = self.worker
         if worker is not None and worker.isRunning():

@@ -8,12 +8,15 @@ class MemoryStore:
     """Local SQLite + sqlite-vec memory for the Shadow."""
 
     def __init__(self, db_path: str, vector_dim: int = 384):
+        import threading
+
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.conn.enable_load_extension(False)
         self.vector_dim = vector_dim
+        self._lock = threading.RLock()
         self._init_schema()
 
     def _init_schema(self) -> None:
