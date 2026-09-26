@@ -14,10 +14,10 @@ modes:
   default: "balanced"
   lite:
     observation_interval_sec: 60
-    model_max_tokens: 256
+    model_max_tokens: 128
   balanced:
     observation_interval_sec: 30
-    model_max_tokens: 512
+    model_max_tokens: 256
   active:
     observation_interval_sec: 10
-    model_max_tokens: 1024
+    model_max_tokens: 512

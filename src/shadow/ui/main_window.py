@@ -1,4 +1,5 @@
 from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -13,7 +14,10 @@ from PySide6.QtWidgets import (
 
 
 class InferenceWorker(QThread):
-    finished = Signal(str)
+    """Runs the LLM in a background thread and emits streamed chunks."""
+
+    chunk = Signal(str)
+    done = Signal()          # renamed from 'finished' — QThread already has that
     failed = Signal(str)
 
     def __init__(self, backend, prompt: str, max_tokens: int):
@@ -24,8 +28,11 @@ class InferenceWorker(QThread):
 
     def run(self):
         try:
-            result = self.backend.generate(self.prompt, max_tokens=self.max_tokens)
-            self.finished.emit(result)
+            for piece in self.backend.generate_stream(
+                self.prompt, max_tokens=self.max_tokens
+            ):
+                self.chunk.emit(piece)
+            self.done.emit()
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
 
@@ -36,6 +43,7 @@ class MainWindow(QMainWindow):
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.worker = None
 
         self.setWindowTitle("SHADOW — Silent On-Device Life Context Agent")
         self.resize(900, 600)
@@ -43,7 +51,10 @@ class MainWindow(QMainWindow):
         central = QWidget()
         layout = QVBoxLayout(central)
 
-        self.backend_label = QLabel(f"Backend: {backend.info['backend'].upper()}")
+        info = backend.info
+        self.backend_label = QLabel(
+            f"Backend: {info['backend'].upper()}  •  threads: {info.get('threads', '?')}"
+        )
         layout.addWidget(self.backend_label)
 
         mode_layout = QHBoxLayout()
@@ -77,24 +88,40 @@ class MainWindow(QMainWindow):
         self.memory.log_activity("app_start", "SHADOW started")
 
     def send_query(self):
+        if self.worker is not None and self.worker.isRunning():
+            return  # ignore new queries while one is running
         prompt = self.input.text().strip()
         if not prompt:
             return
         self.input.clear()
+
         self.output.append(f"<b>You:</b> {prompt}")
+        # start the assistant paragraph; chunks will be inserted after it
+        self.output.append("<b>Shadow:</b> ")
+
         mode = self.mode_combo.currentText()
         max_tokens = self.config["modes"][mode]["model_max_tokens"]
+
         self.worker = InferenceWorker(self.backend, prompt, max_tokens)
-        self.worker.finished.connect(self.on_response)
+        self.worker.chunk.connect(self.on_chunk)
+        self.worker.done.connect(self.on_done)
         self.worker.failed.connect(self.on_error)
         self.worker.start()
 
-    def on_response(self, text: str):
-        self.output.append(f"<b>Shadow:</b> {text}")
-        self.memory.log_activity("query", text[:120])
+    def on_chunk(self, text: str):
+        cursor = self.output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.output.setTextCursor(cursor)
+        self.output.ensureCursorVisible()
+
+    def on_done(self):
+        self.output.append("")  # trailing blank line
+        self.memory.log_activity("query", "completed")
 
     def on_error(self, message: str):
         self.output.append(f"<b style='color:red'>Error:</b> {message}")
+        self.memory.log_activity("error", message[:120])
 
     def wipe_shadow(self):
         self.memory.wipe()
