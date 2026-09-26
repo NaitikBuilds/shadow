@@ -43,6 +43,19 @@ class MemoryStore:
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_observations USING vec0(
                 embedding float[{self.vector_dim}]
             );
+            CREATE TABLE IF NOT EXISTS consents (
+                channel TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                scope TEXT DEFAULT 'global',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS consent_audit (
+                id INTEGER PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                channel TEXT,
+                action TEXT,
+                reason TEXT
+            );
             """
         )
         self.conn.commit()
@@ -105,3 +118,48 @@ class MemoryStore:
 
     def __exit__(self, exc_type, exc, tb):
         self.close()
+
+    def seed_consents(self, channels: list[str]) -> None:
+        """Ensure every channel has a row. Missing rows default to disabled."""
+        cur = self.conn.cursor()
+        for ch in channels:
+            cur.execute(
+            "INSERT OR IGNORE INTO consents (channel, enabled) VALUES (?, 0)",
+            (ch,),
+            )
+        self.conn.commit()
+
+    def set_consent(self, channel: str, enabled: bool, reason: str = "") -> None:
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO consents (channel, enabled, updated_at) "
+            "VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(channel) DO UPDATE SET "
+            "enabled = excluded.enabled, updated_at = CURRENT_TIMESTAMP",
+            (channel, 1 if enabled else 0),
+        )
+        cur.execute(
+            "INSERT INTO consent_audit (channel, action, reason) VALUES (?, ?, ?)",
+            (channel, "enable" if enabled else "disable", reason),
+        )
+        self.conn.commit()
+
+    def get_consent(self, channel: str) -> bool:
+        cur = self.conn.cursor()
+        cur.execute("SELECT enabled FROM consents WHERE channel = ?", (channel,))
+        row = cur.fetchone()
+        return bool(row[0]) if row else False
+
+    def all_consents(self) -> dict[str, bool]:
+        cur = self.conn.cursor()
+        cur.execute("SELECT channel, enabled FROM consents")
+        return {ch: bool(en) for ch, en in cur.fetchall()}
+
+    def consent_audit(self, limit: int = 100) -> list[tuple]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT timestamp, channel, action, reason FROM consent_audit "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return cur.fetchall()
