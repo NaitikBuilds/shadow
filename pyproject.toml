@@ -3,7 +3,7 @@ name = "shadow"
 version = "0.1.0"
 description = "SHADOW — Silent On-Device Life Context Agent"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "Naitik" }]
 dependencies = [
