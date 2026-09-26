@@ -1,6 +1,8 @@
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent, QTextCursor
 from shadow.ui.indicator import ObservationIndicator
+from shadow.ui.privacy_dashboard import PrivacyDashboard
+from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.memory.retriever import ShadowRetriever
 from PySide6.QtWidgets import (
     QComboBox,
@@ -15,8 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 import sys
-
-from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 
 
 class InferenceWorker(QThread):
@@ -110,6 +110,9 @@ class MainWindow(QMainWindow):
         consent_action = settings_menu.addAction("Consent…")
         consent_action.triggered.connect(self.open_consent_panel)
 
+        privacy_action = settings_menu.addAction("Privacy Dashboard…")
+        privacy_action.triggered.connect(self.open_privacy_dashboard)
+
     def open_consent_panel(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("SHADOW — Consent")
@@ -119,6 +122,21 @@ class MainWindow(QMainWindow):
         panel = ConsentPanel(self.memory, self.config)
         panel.consent_changed.connect(self._on_consent_changed)
         layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def open_privacy_dashboard(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Privacy Dashboard")
+        dlg.resize(640, 520)
+        layout = QVBoxLayout(dlg)
+
+        dash = PrivacyDashboard(self.memory, self.backend)
+        layout.addWidget(dash)
 
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dlg.accept)
