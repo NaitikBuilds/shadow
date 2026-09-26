@@ -8,11 +8,13 @@ license = { text = "MIT" }
 authors = [{ name = "Naitik" }]
 dependencies = [
     "PySide6>=6.7",
-    "llama-cpp-python>=0.3.0",
+    "llama-cpp-python @ https://github.com/oobabooga/llama-cpp-python-cuBLAS-wheels/releases/download/cpu/llama_cpp_python-0.3.7+cpuavx-cp311-cp311-win_amd64.whl",
     "sqlite-vec>=0.1.0",
     "pyyaml>=6.0",
     "numpy>=1.26",
     "requests>=2.31",
+    "onnxruntime>=1.18",
+    "tokenizers>=0.20",
 ]
 
 [project.optional-dependencies]

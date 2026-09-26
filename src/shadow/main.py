@@ -12,10 +12,12 @@ def main() -> int:
     config = load_config()
 
     backend = CpuBackend(
-        model_path=config["model"]["path"],
-        n_ctx=config["model"]["n_ctx"],
-        n_threads=config["model"].get("n_threads") or None,
-        n_gpu_layers=config["model"]["n_gpu_layers"],
+    model_path=config["model"]["path"],
+    n_ctx=config["model"]["n_ctx"],
+    n_threads=config["model"].get("n_threads") or None,
+    n_gpu_layers=config["model"]["n_gpu_layers"],
+    embedder_model=config["model"].get("embedder_model"),
+    embedder_tokenizer=config["model"].get("embedder_tokenizer"),
     )
 
     memory = MemoryStore(
