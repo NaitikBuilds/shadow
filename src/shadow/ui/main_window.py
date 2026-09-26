@@ -2,6 +2,7 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,                # NEW in Commit 3
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -11,6 +12,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from shadow.ui.consent_panel import ConsentPanel   # NEW in Commit 3
 
 
 class InferenceWorker(QThread):
@@ -31,7 +34,6 @@ class InferenceWorker(QThread):
             for piece in self.backend.generate_stream(
                 self.prompt, max_tokens=self.max_tokens
             ):
-                # Cooperative cancellation: exit between tokens if asked.
                 if self.isInterruptionRequested():
                     break
                 self.chunk.emit(piece)
@@ -89,7 +91,38 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.wipe_btn)
 
         self.setCentralWidget(central)
+        self._build_menu()                                    # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
+
+    # ---------- menu (NEW in Commit 3) ----------
+
+    def _build_menu(self):
+        menu = self.menuBar()
+        settings_menu = menu.addMenu("Settings")
+
+        consent_action = settings_menu.addAction("Consent…")
+        consent_action.triggered.connect(self.open_consent_panel)
+
+    def open_consent_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Consent")
+        dlg.resize(560, 640)
+        layout = QVBoxLayout(dlg)
+
+        panel = ConsentPanel(self.memory, self.config)
+        panel.consent_changed.connect(self._on_consent_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def _on_consent_changed(self, channel: str, enabled: bool):
+        self.memory.log_activity(
+            "consent_change", f"{channel}={'on' if enabled else 'off'}"
+        )
 
     # ---------- query flow ----------
 
@@ -148,8 +181,6 @@ class MainWindow(QMainWindow):
         if worker is not None and worker.isRunning():
             worker.requestInterruption()
             if not worker.wait(3000):
-                # Still running after 3 s. We accept the close anyway;
-                # the OS reclaims the thread when the process exits.
                 print("[shadow] worker did not stop within 3 s; forcing exit")
 
         try:
