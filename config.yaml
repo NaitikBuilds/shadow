@@ -1,3 +1,17 @@
+consent:
+  screen_capture: false # screen content understanding (active window + visible text)
+  document_parsing: false # PDF / doc parsing
+  meeting_audio: false # local ASR when enabled
+  calendar: false # calendar ingestion
+  typing_dynamics: false # pause patterns, rhythm
+  webcam_posture: false # optional coarse affect (heavily gated)
+
+observation:
+  indicator_enabled: true
+  indicator_position: "topbar" # topbar | tray | both
+  default_mode: "balanced" # lite | balanced | active
+  retention_days: 90 # 0 = keep forever
+
 model:
   path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
   n_ctx: 4096
