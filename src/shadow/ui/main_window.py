@@ -1,9 +1,10 @@
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent, QTextCursor
 from shadow.ui.indicator import ObservationIndicator
+from shadow.memory.retriever import ShadowRetriever
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,                # NEW in Commit 3
+    QDialog,  # NEW in Commit 3
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -13,8 +14,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import sys
 
-from shadow.ui.consent_panel import ConsentPanel   # NEW in Commit 3
+from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 
 
 class InferenceWorker(QThread):
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.retriever = ShadowRetriever(self.memory, self.backend)
         self.worker = None
         self._shutting_down = False
 
@@ -95,7 +98,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.wipe_btn)
 
         self.setCentralWidget(central)
-        self._build_menu()                                    # NEW in Commit 3
+        self._build_menu()  # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
 
     # ---------- menu (NEW in Commit 3) ----------
@@ -132,6 +135,16 @@ class MainWindow(QMainWindow):
     # ---------- query flow ----------
 
     def send_query(self):
+        try:
+            self._send_query_inner()
+        except Exception:
+            import traceback
+
+            tb = traceback.format_exc()
+            print(tb, file=sys.stderr)
+            self.output.append(f"<b style='color:red'>Exception:</b><pre>{tb}</pre>")
+
+    def _send_query_inner(self):
         if self._shutting_down:
             return
         if self.worker is not None and self.worker.isRunning():
@@ -141,13 +154,15 @@ class MainWindow(QMainWindow):
             return
         self.input.clear()
 
+        augmented = self._build_prompt_with_context(prompt)
+
         self.output.append(f"<b>You:</b> {prompt}")
         self.output.append("<b>Shadow:</b> ")
 
         mode = self.mode_combo.currentText()
         max_tokens = self.config["modes"][mode]["model_max_tokens"]
 
-        self.worker = InferenceWorker(self.backend, prompt, max_tokens)
+        self.worker = InferenceWorker(self.backend, augmented, max_tokens)
         self.worker.chunk.connect(self.on_chunk)
         self.worker.done.connect(self.on_done)
         self.worker.failed.connect(self.on_error)
@@ -176,6 +191,32 @@ class MainWindow(QMainWindow):
         self.memory.wipe()
         self.output.append("<b>Shadow:</b> All local memory wiped.")
         self.memory.log_activity("wipe", "Full Shadow wipe executed")
+
+    def _build_prompt_with_context(self, user_prompt: str) -> str:
+        # 1) Always try semantic retrieval.
+        context = self.retriever.context_for(user_prompt, k=5)
+
+        # 2) Also check for temporal keywords.
+        for window in ("last month", "yesterday", "last week", "today"):
+            if window in user_prompt.lower():
+                temporal = self.retriever.temporal(window)
+                if temporal:
+                    lines = "\n".join(
+                        f"- [{o['timestamp']}] ({o['source']}) {o['content']}"
+                        for o in temporal[:20]
+                    )
+                    context = (context + "\n\n" if context else "") + (
+                        f"Observations from {window}:\n{lines}"
+                    )
+                break
+
+        if not context:
+            return user_prompt
+        return (
+            "You are answering using the user's own past observations. "
+            "Use them if relevant; ignore them if not.\n\n"
+            f"{context}\n\nUser question: {user_prompt}"
+        )
 
     # ---------- graceful shutdown ----------
 

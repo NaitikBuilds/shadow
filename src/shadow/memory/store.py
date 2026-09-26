@@ -18,8 +18,7 @@ class MemoryStore:
 
     def _init_schema(self) -> None:
         cur = self.conn.cursor()
-        cur.executescript(
-            f"""
+        cur.executescript(f"""
             CREATE TABLE IF NOT EXISTS observations (
                 id INTEGER PRIMARY KEY,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -56,8 +55,7 @@ class MemoryStore:
                 action TEXT,
                 reason TEXT
             );
-            """
-        )
+            """)
         self.conn.commit()
 
     def add_observation(self, source: str, content: str, metadata: str = "") -> int:
@@ -96,14 +94,12 @@ class MemoryStore:
 
     def wipe(self) -> None:
         cur = self.conn.cursor()
-        cur.executescript(
-            """
+        cur.executescript("""
             DELETE FROM observations;
             DELETE FROM intentions;
             DELETE FROM activity_log;
             DELETE FROM vec_observations;
-            """
-        )
+            """)
         self.conn.commit()
 
     def close(self) -> None:
@@ -124,8 +120,8 @@ class MemoryStore:
         cur = self.conn.cursor()
         for ch in channels:
             cur.execute(
-            "INSERT OR IGNORE INTO consents (channel, enabled) VALUES (?, 0)",
-            (ch,),
+                "INSERT OR IGNORE INTO consents (channel, enabled) VALUES (?, 0)",
+                (ch,),
             )
         self.conn.commit()
 
@@ -161,5 +157,30 @@ class MemoryStore:
             "SELECT timestamp, channel, action, reason FROM consent_audit "
             "ORDER BY id DESC LIMIT ?",
             (limit,),
+        )
+        return cur.fetchall()
+
+    def search_similar(self, embedding: list[float], limit: int = 5) -> list[tuple]:
+        """Return [(observation_id, content, timestamp, source, distance)]."""
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT o.id, o.content, o.timestamp, o.source, v.distance
+            FROM vec_observations v
+            JOIN observations o ON o.id = v.rowid
+            WHERE v.embedding MATCH ? AND k = ?
+            ORDER BY v.distance
+            """,
+            (sqlite_vec.serialize_float32(embedding), limit),
+        )
+        return cur.fetchall()
+
+    def observations_between(self, start: str, end: str) -> list[tuple]:
+        """Return [(id, timestamp, source, content)] between two ISO datetimes."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT id, timestamp, source, content FROM observations "
+            "WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
+            (start, end),
         )
         return cur.fetchall()
