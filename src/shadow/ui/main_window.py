@@ -1,5 +1,6 @@
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent, QTextCursor
+from shadow.ui.indicator import ObservationIndicator
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,                # NEW in Commit 3
@@ -63,6 +64,9 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(self.backend_label)
 
+        self.indicator = ObservationIndicator(self.memory, self.config)
+        layout.addWidget(self.indicator)
+
         mode_layout = QHBoxLayout()
         mode_layout.addWidget(QLabel("Mode:"))
         self.mode_combo = QComboBox()
@@ -123,6 +127,7 @@ class MainWindow(QMainWindow):
         self.memory.log_activity(
             "consent_change", f"{channel}={'on' if enabled else 'off'}"
         )
+        self.indicator.refresh()
 
     # ---------- query flow ----------
 
