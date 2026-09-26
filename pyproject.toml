@@ -15,6 +15,8 @@ dependencies = [
     "requests>=2.31",
     "onnxruntime>=1.18",
     "tokenizers>=0.20",
+    "pywin32>=306",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
