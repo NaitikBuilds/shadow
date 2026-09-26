@@ -39,11 +39,15 @@ class ShadowRetriever:
             for r in rows
         ]
 
-    def context_for(self, query: str, k: int = 5) -> str:
+    def context_for(self, query: str, k: int = 3) -> str:
         """Build a small context block for the LLM from retrieved observations."""
         pieces = []
         for obs in self.semantic(query, k=k):
-            pieces.append(f"- [{obs['timestamp']}] ({obs['source']}) {obs['content']}")
+            content = obs["content"].strip()
+            if len(content) < 25:
+                continue
+            content = content[:150]
+            pieces.append(f"- [{obs['timestamp']}] ({obs['source']}) {content}")
         if not pieces:
             return ""
         return "Relevant past observations:\n" + "\n".join(pieces)

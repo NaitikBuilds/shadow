@@ -267,8 +267,8 @@ class MainWindow(QMainWindow):
                 temporal = self.retriever.temporal(window)
                 if temporal:
                     lines = "\n".join(
-                        f"- [{o['timestamp']}] ({o['source']}) {o['content']}"
-                        for o in temporal[:20]
+                        f"- [{o['timestamp']}] {o['content'][:150]}"
+                        for o in temporal[:5]
                     )
                     context = (context + "\n\n" if context else "") + (
                         f"Observations from {window}:\n{lines}"

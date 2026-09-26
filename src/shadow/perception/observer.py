@@ -116,6 +116,18 @@ class ObservationWorker(QThread):
             self.observation.emit(source.name, preview)
 
     def _content_from(self, source_name: str, payload: dict) -> str:
+        # Never observe ourselves.
+        process = (payload.get("process") or "").lower()
+        title = (payload.get("title") or "").lower()
+        if "python" in process and "shadow" in title:
+            return ""
+        if "shadow" in title and "silent on-device" in title:
+            return ""
+        if source_name == "screen_ocr":
+            text_lower = (payload.get("text") or "").lower()
+            if "silent on-device life context agent" in text_lower:
+                return ""
+
         if source_name == "active_window":
             title = (payload.get("title") or "").strip()
             process = (payload.get("process") or "").strip()
@@ -128,12 +140,22 @@ class ObservationWorker(QThread):
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:
-        h = hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()
         now = time.time()
-        last = self._last_seen.get(source_name)
-        if last and last[0] == h and (now - last[1]) < self.pcfg["dedupe_window_sec"]:
-            return True
-        self._last_seen[source_name] = (h, now)
+        exact = hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()
+        fuzzy = hashlib.sha1(content[:80].encode("utf-8", errors="ignore")).hexdigest()
+
+        last_exact = self._last_seen.get(f"{source_name}:exact")
+        if last_exact and last_exact[0] == exact:
+            if now - last_exact[1] < self.pcfg["dedupe_window_sec"]:
+                return True
+
+        last_fuzzy = self._last_seen.get(f"{source_name}:fuzzy")
+        if last_fuzzy and last_fuzzy[0] == fuzzy:
+            if now - last_fuzzy[1] < 120:
+                return True
+
+        self._last_seen[f"{source_name}:exact"] = (exact, now)
+        self._last_seen[f"{source_name}:fuzzy"] = (fuzzy, now)
         return False
 
     def _user_idle_too_long(self) -> bool:

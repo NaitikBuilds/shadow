@@ -7,6 +7,25 @@ from typing import Any
 from .base import PerceptionSource
 
 
+def _looks_like_real_text(text: str) -> bool:
+    """Reject OCR output that's mostly symbols, mixed case chaos, or too short."""
+    if not text or len(text.strip()) < 20:
+        return False
+    stripped = text.strip()
+    total = len(stripped)
+    alnum = sum(c.isalnum() or c.isspace() for c in stripped)
+    if alnum / total < 0.65:
+        return False
+    letters = sum(c.isalpha() for c in stripped)
+    if letters / total < 0.40:
+        return False
+    # Heuristic: too many isolated uppercase runs like "FullyQuaIifiedError"
+    upper_runs = sum(1 for c in stripped if c.isupper())
+    if upper_runs / max(letters, 1) > 0.35:
+        return False
+    return True
+
+
 class ScreenOCRSource(PerceptionSource):
     """Captures the active window and extracts visible text via Windows OCR."""
 
@@ -26,6 +45,8 @@ class ScreenOCRSource(PerceptionSource):
         if not text or len(text.strip()) < 3:
             return None
         text = text.strip()[: self.max_chars]
+        if not _looks_like_real_text(text):
+            return None
         return {
             "text": text,
             "word_count": len(text.split()),
