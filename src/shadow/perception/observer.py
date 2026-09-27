@@ -10,6 +10,8 @@ from shadow.perception import ActiveWindowSource, ScreenOCRSource
 
 from shadow.memory import EntityExtractor, GraphBuilder
 
+from shadow.perception import ActiveWindowSource, ScreenOCRSource, TypingDynamicsSource
+
 
 class ObservationWorker(QThread):
     """Background loop that samples perception sources and writes to memory.
@@ -38,6 +40,16 @@ class ObservationWorker(QThread):
             self.sources.append(ActiveWindowSource())
         if source_enabled(config, "screen_ocr"):
             self.sources.append(ScreenOCRSource())
+        if source_enabled(config, "typing_dynamics"):
+            tcfg = self.pcfg.get("typing") or {}
+            self.sources.append(
+                TypingDynamicsSource(
+                    pause_threshold_sec=tcfg.get("pause_threshold_sec", 2.0),
+                    min_keystrokes=tcfg.get("min_keystrokes", 10),
+                )
+            )
+
+        print(f"[observer] sources: {[s.name for s in self.sources]}", flush=True)
 
         self.graph_builder: GraphBuilder | None = None
         ee_cfg = self.pcfg.get("entity_extraction") or {}
@@ -59,6 +71,11 @@ class ObservationWorker(QThread):
     def stop(self) -> None:
         self._stopped = True
         self.requestInterruption()
+        for source in self.sources:
+            try:
+                source.stop()
+            except Exception:  # noqa: BLE001
+                pass
 
     def run(self):
         while not self.isInterruptionRequested() and not self._stopped:
@@ -153,6 +170,8 @@ class ObservationWorker(QThread):
             return f"{process}: {title}" if process else title
         if source_name == "screen_ocr":
             return (payload.get("text") or "").strip()
+        if source_name == "typing_dynamics":
+            return (payload.get("summary") or "").strip()
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:

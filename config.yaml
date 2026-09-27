@@ -33,13 +33,17 @@ perception:
   sources:
     active_window: true
     screen_ocr: true
-    typing_dynamics: false
+    typing_dynamics: true
     document_watch: false
     calendar: false
 
   # Guardrails
   max_title_length: 200
   min_title_length: 3            # ignore "untitled", empty titles, etc.  
+
+  typing:
+    pause_threshold_sec: 2.0
+    min_keystrokes: 10
 
 model:
   path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"

@@ -22,3 +22,7 @@ class PerceptionSource(ABC):
         nothing to report right now (e.g. no active window, user idle).
         """
         ...
+
+    def stop(self) -> None:
+        """Optional cleanup. Called when the observer stops."""
+        pass

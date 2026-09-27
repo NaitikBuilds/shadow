@@ -3,6 +3,7 @@
 from .base import PerceptionSource
 from .active_window import ActiveWindowSource, ActiveWindow
 from .screen_ocr import ScreenOCRSource
+from .typing import TypingDynamicsSource
 from .observer import ObservationWorker
 
 __all__ = [
@@ -10,5 +11,6 @@ __all__ = [
     "ActiveWindowSource",
     "ActiveWindow",
     "ScreenOCRSource",
+    "TypingDynamicsSource",
     "ObservationWorker",
 ]
