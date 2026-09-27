@@ -58,6 +58,37 @@ class MemoryStore:
                 action TEXT,
                 reason TEXT
             );
+                        CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                mention_count INTEGER DEFAULT 1,
+                UNIQUE(type, name)
+            );
+            CREATE TABLE IF NOT EXISTS edges (
+                id INTEGER PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                target_id INTEGER NOT NULL,
+                relation TEXT NOT NULL,
+                weight REAL DEFAULT 1.0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_id, target_id, relation),
+                FOREIGN KEY(source_id) REFERENCES entities(id) ON DELETE CASCADE,
+                FOREIGN KEY(target_id) REFERENCES entities(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS observation_entities (
+                observation_id INTEGER NOT NULL,
+                entity_id INTEGER NOT NULL,
+                PRIMARY KEY (observation_id, entity_id),
+                FOREIGN KEY(observation_id) REFERENCES observations(id) ON DELETE CASCADE,
+                FOREIGN KEY(entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
+            CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
+            CREATE INDEX IF NOT EXISTS idx_obs_entities_obs ON observation_entities(observation_id);
+            CREATE INDEX IF NOT EXISTS idx_obs_entities_ent ON observation_entities(entity_id); 
             """)
         self.conn.commit()
 
@@ -96,14 +127,156 @@ class MemoryStore:
         return cur.fetchall()
 
     def wipe(self) -> None:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.executescript("""
+                DELETE FROM observation_entities;
+                DELETE FROM edges;
+                DELETE FROM entities;
+                DELETE FROM vec_observations;
+                DELETE FROM observations;
+                DELETE FROM intentions;
+                DELETE FROM activity_log;
+                """)
+            self.conn.commit()
+
+        # ---------- knowledge graph ----------
+
+    def upsert_entity(self, entity_type: str, name: str) -> int:
+        """Insert or bump an entity. Returns its id."""
+        name = name.strip()
+        if not name:
+            raise ValueError("entity name cannot be empty")
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO entities (type, name) VALUES (?, ?)
+                ON CONFLICT(type, name) DO UPDATE SET
+                    last_seen = CURRENT_TIMESTAMP,
+                    mention_count = mention_count + 1
+                """,
+                (entity_type, name),
+            )
+            self.conn.commit()
+            cur.execute(
+                "SELECT id FROM entities WHERE type = ? AND name = ?",
+                (entity_type, name),
+            )
+            row = cur.fetchone()
+            return int(row[0])
+
+    def link_entity_to_observation(self, observation_id: int, entity_id: int) -> None:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO observation_entities "
+                "(observation_id, entity_id) VALUES (?, ?)",
+                (observation_id, entity_id),
+            )
+            self.conn.commit()
+
+    def add_edge(
+        self,
+        source_id: int,
+        target_id: int,
+        relation: str,
+        weight: float = 1.0,
+    ) -> None:
+        """Create or strengthen an edge. Weight accumulates."""
+        if source_id == target_id:
+            return
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO edges (source_id, target_id, relation, weight)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source_id, target_id, relation) DO UPDATE SET
+                    weight = weight + excluded.weight
+                """,
+                (source_id, target_id, relation, weight),
+            )
+            self.conn.commit()
+
+    def entity_by_name(self, entity_type: str, name: str) -> dict | None:
         cur = self.conn.cursor()
-        cur.executescript("""
-            DELETE FROM observations;
-            DELETE FROM intentions;
-            DELETE FROM activity_log;
-            DELETE FROM vec_observations;
-            """)
-        self.conn.commit()
+        cur.execute(
+            "SELECT id, type, name, mention_count, first_seen, last_seen "
+            "FROM entities WHERE type = ? AND name = ?",
+            (entity_type, name),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "type": row[1],
+            "name": row[2],
+            "mention_count": row[3],
+            "first_seen": row[4],
+            "last_seen": row[5],
+        }
+
+    def entities_for_observation(self, observation_id: int) -> list[dict]:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT e.id, e.type, e.name
+            FROM observation_entities oe
+            JOIN entities e ON e.id = oe.entity_id
+            WHERE oe.observation_id = ?
+            """,
+            (observation_id,),
+        )
+        return [{"id": r[0], "type": r[1], "name": r[2]} for r in cur.fetchall()]
+
+    def neighbors(self, entity_id: int, limit: int = 20) -> list[dict]:
+        """Return entities connected to the given entity in either direction."""
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT e.id, e.type, e.name, ed.relation, ed.weight, 'out' AS direction
+            FROM edges ed JOIN entities e ON e.id = ed.target_id
+            WHERE ed.source_id = ?
+            UNION ALL
+            SELECT e.id, e.type, e.name, ed.relation, ed.weight, 'in' AS direction
+            FROM edges ed JOIN entities e ON e.id = ed.source_id
+            WHERE ed.target_id = ?
+            ORDER BY weight DESC
+            LIMIT ?
+            """,
+            (entity_id, entity_id, limit),
+        )
+        return [
+            {
+                "id": r[0],
+                "type": r[1],
+                "name": r[2],
+                "relation": r[3],
+                "weight": r[4],
+                "direction": r[5],
+            }
+            for r in cur.fetchall()
+        ]
+
+    def recent_entities(self, limit: int = 30) -> list[dict]:
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT id, type, name, mention_count, last_seen "
+            "FROM entities ORDER BY last_seen DESC LIMIT ?",
+            (limit,),
+        )
+        return [
+            {
+                "id": r[0],
+                "type": r[1],
+                "name": r[2],
+                "mention_count": r[3],
+                "last_seen": r[4],
+            }
+            for r in cur.fetchall()
+        ]
 
     def close(self) -> None:
         """Close the SQLite connection (required on Windows before deleting DB)."""
