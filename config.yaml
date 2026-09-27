@@ -21,6 +21,14 @@ perception:
   # OCR runs on every Nth tick to save CPU (0 = disabled)
   ocr_every_n_ticks: 3
 
+  entity_extraction:
+    enabled: true
+    known_projects:
+      - SHADOW
+      - Phase 1
+      - Phase 2
+      - Phase 3
+
   # Which perception sources are active
   sources:
     active_window: true

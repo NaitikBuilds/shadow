@@ -8,6 +8,8 @@ from PySide6.QtCore import QThread, Signal
 from shadow.config import perception_config, source_enabled, tick_interval
 from shadow.perception import ActiveWindowSource, ScreenOCRSource
 
+from shadow.memory import EntityExtractor, GraphBuilder
+
 
 class ObservationWorker(QThread):
     """Background loop that samples perception sources and writes to memory.
@@ -36,6 +38,14 @@ class ObservationWorker(QThread):
             self.sources.append(ActiveWindowSource())
         if source_enabled(config, "screen_ocr"):
             self.sources.append(ScreenOCRSource())
+
+        self.graph_builder: GraphBuilder | None = None
+        ee_cfg = self.pcfg.get("entity_extraction") or {}
+        if ee_cfg.get("enabled", True):
+            extractor = EntityExtractor(
+                known_projects=ee_cfg.get("known_projects") or []
+            )
+            self.graph_builder = GraphBuilder(self.memory, extractor)
 
         self._tick_count = 0
         self._last_seen: dict[str, tuple[str, float]] = {}
@@ -111,6 +121,12 @@ class ObservationWorker(QThread):
                 self.memory.add_embedding(rowid, vec)
             except Exception as exc:  # noqa: BLE001
                 self.error.emit(f"embed failed for {source.name}: {exc}")
+
+            if self.graph_builder is not None:
+                try:
+                    self.graph_builder.process(rowid, content)
+                except Exception as exc:  # noqa: BLE001
+                    self.error.emit(f"graph build failed for {source.name}: {exc}")
 
             preview = content[:120].replace("\n", " ")
             self.observation.emit(source.name, preview)
