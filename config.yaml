@@ -15,7 +15,7 @@ observation:
 perception:
   enabled: true
   tick_interval_sec: 30          # how often the observer samples
-  idle_skip_sec: 120             # skip sampling if user is idle this long
+  idle_skip_sec: 600             # skip sampling if user is idle this long
   dedupe_window_sec: 60          # don't repeat identical observations within this window
 
   # OCR runs on every Nth tick to save CPU (0 = disabled)
@@ -34,8 +34,8 @@ perception:
     active_window: true
     screen_ocr: true
     typing_dynamics: true
-    document_watch: false
-    calendar: false
+    document_watch: true
+    calendar: true
 
   # Guardrails
   max_title_length: 200
@@ -44,6 +44,19 @@ perception:
   typing:
     pause_threshold_sec: 2.0
     min_keystrokes: 10
+
+  documents:
+    watch_folders:
+      - "~/Documents"
+      - "~/Downloads"
+      - "~/OneDrive/Documents"
+    extensions:
+      - ".pdf"
+      - ".txt"
+      - ".md"
+      - ".docx"
+    max_file_size_mb: 5
+    max_chars: 4000
 
 model:
   path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"

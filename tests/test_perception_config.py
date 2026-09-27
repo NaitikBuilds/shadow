@@ -19,7 +19,7 @@ def test_defaults_when_block_missing():
     assert p["enabled"] is True
     assert p["tick_interval_sec"] == 30
     assert p["sources"]["active_window"] is True
-    assert p["sources"]["typing_dynamics"] is False
+    assert p["sources"]["typing_dynamics"] is True
 
 
 def test_partial_sources_override_keeps_defaults():
@@ -31,8 +31,11 @@ def test_partial_sources_override_keeps_defaults():
 
 def test_source_enabled_helper():
     cfg = load_config()
-    assert source_enabled(cfg, "active_window") is True
-    assert source_enabled(cfg, "typing_dynamics") is False
+    # Every source shipped in this build should be available.
+    # Consent — not this flag — is what gates actual observation.
+    for source in ("active_window", "screen_ocr", "typing_dynamics"):
+        assert source_enabled(cfg, source) is True
+    # Unknown sources default to disabled.
     assert source_enabled(cfg, "nonexistent_source") is False
 
 

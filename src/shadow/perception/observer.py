@@ -12,6 +12,13 @@ from shadow.memory import EntityExtractor, GraphBuilder
 
 from shadow.perception import ActiveWindowSource, ScreenOCRSource, TypingDynamicsSource
 
+from shadow.perception import (
+    ActiveWindowSource,
+    DocumentSource,
+    ScreenOCRSource,
+    TypingDynamicsSource,
+)
+
 
 class ObservationWorker(QThread):
     """Background loop that samples perception sources and writes to memory.
@@ -49,7 +56,17 @@ class ObservationWorker(QThread):
                 )
             )
 
-        print(f"[observer] sources: {[s.name for s in self.sources]}", flush=True)
+        if source_enabled(config, "document_watch"):
+            dcfg = self.pcfg.get("documents") or {}
+            self.sources.append(
+                DocumentSource(
+                    watch_folders=dcfg.get("watch_folders") or [],
+                    extensions=dcfg.get("extensions")
+                    or [".txt", ".md", ".pdf", ".docx"],
+                    max_file_size_mb=dcfg.get("max_file_size_mb", 5),
+                    max_chars=dcfg.get("max_chars", 4000),
+                )
+            )
 
         self.graph_builder: GraphBuilder | None = None
         ee_cfg = self.pcfg.get("entity_extraction") or {}
@@ -172,6 +189,12 @@ class ObservationWorker(QThread):
             return (payload.get("text") or "").strip()
         if source_name == "typing_dynamics":
             return (payload.get("summary") or "").strip()
+        if source_name == "document":
+            name = (payload.get("name") or "").strip()
+            text = (payload.get("text") or "").strip()
+            if not name or not text:
+                return ""
+            return f"Document: {name}\n{text}"
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:

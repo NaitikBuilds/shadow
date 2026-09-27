@@ -33,9 +33,9 @@ def perception_config(config: dict) -> dict:
         "sources": {
             "active_window": True,
             "screen_ocr": True,
-            "typing_dynamics": False,
-            "document_watch": False,
-            "calendar": False,
+            "typing_dynamics": True,
+            "document_watch": True,
+            "calendar": True,
         },
         "max_title_length": 200,
         "min_title_length": 3,
