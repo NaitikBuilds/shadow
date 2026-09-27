@@ -18,6 +18,7 @@ from shadow.perception import (
     DocumentSource,
     ScreenOCRSource,
     TypingDynamicsSource,
+    WindowsCalendarSource,
 )
 
 
@@ -71,6 +72,16 @@ class ObservationWorker(QThread):
 
         if source_enabled(config, "calendar"):
             ccfg = self.pcfg.get("calendar") or {}
+            # Preferred: native Windows consolidated calendar store.
+            # Requires MSIX packaging for the 'appointments' capability.
+            # Gracefully no-ops when permission is unavailable.
+            self.sources.append(
+                WindowsCalendarSource(
+                    lookback_days=ccfg.get("lookback_days", 1),
+                    lookahead_days=ccfg.get("lookahead_days", 14),
+                )
+            )
+            # Fallback: .ics files in watched folders.
             self.sources.append(
                 CalendarSource(
                     watch_folders=ccfg.get("watch_folders") or [],
@@ -206,7 +217,7 @@ class ObservationWorker(QThread):
             if not name or not text:
                 return ""
             return f"Document: {name}\n{text}"
-        if source_name == "calendar":
+        if source_name in ("calendar", "calendar_winrt"):
             return (payload.get("content") or "").strip()
         return ""
 

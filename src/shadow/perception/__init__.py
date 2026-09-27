@@ -6,6 +6,7 @@ from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
 from .documents import DocumentSource
 from .calendar import CalendarSource
+from .calendar_winrt import WindowsCalendarSource
 from .observer import ObservationWorker
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "TypingDynamicsSource",
     "DocumentSource",
     "CalendarSource",
+    "WindowsCalendarSource",
     "ObservationWorker",
 ]
