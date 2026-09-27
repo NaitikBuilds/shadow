@@ -5,6 +5,7 @@ from .active_window import ActiveWindowSource, ActiveWindow
 from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
 from .documents import DocumentSource
+from .calendar import CalendarSource
 from .observer import ObservationWorker
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "ScreenOCRSource",
     "TypingDynamicsSource",
     "DocumentSource",
+    "CalendarSource",
     "ObservationWorker",
 ]

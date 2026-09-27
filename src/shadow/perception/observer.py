@@ -14,6 +14,7 @@ from shadow.perception import ActiveWindowSource, ScreenOCRSource, TypingDynamic
 
 from shadow.perception import (
     ActiveWindowSource,
+    CalendarSource,
     DocumentSource,
     ScreenOCRSource,
     TypingDynamicsSource,
@@ -65,6 +66,16 @@ class ObservationWorker(QThread):
                     or [".txt", ".md", ".pdf", ".docx"],
                     max_file_size_mb=dcfg.get("max_file_size_mb", 5),
                     max_chars=dcfg.get("max_chars", 4000),
+                )
+            )
+
+        if source_enabled(config, "calendar"):
+            ccfg = self.pcfg.get("calendar") or {}
+            self.sources.append(
+                CalendarSource(
+                    watch_folders=ccfg.get("watch_folders") or [],
+                    lookback_days=ccfg.get("lookback_days", 1),
+                    lookahead_days=ccfg.get("lookahead_days", 14),
                 )
             )
 
@@ -195,6 +206,8 @@ class ObservationWorker(QThread):
             if not name or not text:
                 return ""
             return f"Document: {name}\n{text}"
+        if source_name == "calendar":
+            return (payload.get("content") or "").strip()
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:

@@ -58,6 +58,13 @@ perception:
     max_file_size_mb: 5
     max_chars: 4000
 
+  calendar:
+    watch_folders:
+      - "~/Documents"
+      - "~/Downloads"
+    lookback_days: 1
+    lookahead_days: 14  
+
 model:
   path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
   n_ctx: 4096
