@@ -322,7 +322,11 @@ Full details in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+Business Source License 1.1 (BSL 1.1) — see [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
+
+Free for personal, educational, and research use. Commercial use requires a
+separate license until the Change Date (four years after first public release),
+at which point the license converts to Apache 2.0.
 
 ---
 

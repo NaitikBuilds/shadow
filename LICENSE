@@ -1,21 +1,59 @@
-MIT License
+Business Source License 1.1
 
-Copyright (c) 2026 Naitik
+License text copyright (c) 2026 MariaDB plc, used under the Business Source
+License 1.1. The Business Source License (this "License") is not an Open
+Source license. However, the Licensed Work will eventually be made available
+under an Open Source License, as stated in this License.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+License Grant
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Licensor:             Naitik
+Licensed Work:        SHADOW — Silent On-Device Life Context Agent
+                      The Licensed Work is (c) 2026 Naitik.
+Additional Use Grant: You may use the Licensed Work for personal,
+                      educational, research, or evaluation purposes.
+                      You may not use the Licensed Work for commercial
+                      purposes, including but not limited to offering it
+                      as a paid product or service, without a separate
+                      commercial license from the Licensor.
+Change Date:          Four years from the date the Licensed Work is
+                      first made publicly available.
+Change License:       Apache License, Version 2.0
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+Notice
+
+The Business Source License (this "License") is not an Open Source license.
+However, the Licensed Work will eventually be made available under an Open
+Source License, as stated in this License.
+
+You may make use of the Licensed Work, provided that you do not use the
+Licensed Work for a commercial purpose. A use is a "commercial purpose" if
+it is intended for or directed toward commercial advantage or monetary
+compensation.
+
+You may not:
+  (a) distribute the Licensed Work or any derivative work for a commercial
+      purpose;
+  (b) offer the Licensed Work or any derivative work as a hosted or managed
+      service;
+  (c) modify, translate, reverse engineer, decompile, or disassemble the
+      Licensed Work except as permitted by applicable law.
+
+You must:
+  (a) retain all copyright, patent, trademark, and attribution notices in
+      the Licensed Work and any derivative work;
+  (b) include a copy of this License with any distribution of the Licensed
+      Work or any derivative work.
+
+Disclaimer
+
+THE LICENSED WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+OUT OF OR IN CONNECTION WITH THE LICENSED WORK OR THE USE OR OTHER DEALINGS
+IN THE LICENSED WORK.
+
+For the full text of the Business Source License 1.1, see:
+https://mariadb.com/bsl11/
