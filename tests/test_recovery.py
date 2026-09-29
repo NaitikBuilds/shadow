@@ -101,7 +101,7 @@ def test_orphan_dropped_when_reembed_fails(store):
 
 
 def test_empty_orphan_dropped(store):
-    obs_id = _orphan(store, "   ", _iso(hours_ago=30))
+    _orphan(store, "   ", _iso(hours_ago=30))
     rec = CrashRecovery(store, FakeBackend(), {})
     reembedded, dropped = rec._recover_orphans()
     assert reembedded == 0

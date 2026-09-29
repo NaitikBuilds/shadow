@@ -72,3 +72,8 @@ markers = [
     "network: verifies network isolation",
 ]
 addopts = "-ra --strict-markers"
+
+[tool.shadow]
+docs = "docs/"
+architecture = "docs/ARCHITECTURE.md"
+decisions = "docs/DECISIONS.md"

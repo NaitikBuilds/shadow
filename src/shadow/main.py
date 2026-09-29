@@ -5,10 +5,8 @@ from PySide6.QtWidgets import QApplication
 from shadow.config import consent_channels, load_config
 from shadow.errors import ErrorReporter, install_exception_hook
 from shadow.hal.cpu_backend import CpuBackend
-from shadow.memory.store import MemoryStore
-from shadow.ui.main_window import MainWindow
-
 from shadow.memory import CrashRecovery, MemoryStore, RetentionPolicy
+from shadow.ui.main_window import MainWindow
 
 
 def main() -> int:

@@ -6,7 +6,6 @@ shutdowns, repairs orphan observations, and reports a summary.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Callable
 
 from shadow.config import retention_config
 

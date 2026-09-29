@@ -25,7 +25,7 @@ The project is developed in the open for learning and portfolio purposes, but is
 | Foundation | ✅ Complete |
 | Core local observation + retrieval | ✅ Complete |
 | Extended perception | ✅ Complete |
-| Infrastructure hardening | 🚧 In progress |
+| Infrastructure hardening | ✅ Complete |
 | Further features | 🔒 Private roadmap |
 
 Development is part-time and ongoing. No release schedule.
@@ -40,6 +40,10 @@ Development is part-time and ongoing. No release schedule.
 - Local knowledge graph built from observations
 - Consent controls, activity log, and one-click local data wipe
 - Streaming chat interface backed by a small local language model
+- Versioned database migrations with automatic backups
+- System tray integration with minimize-to-tray
+- Retention policies and crash recovery
+- Structured error taxonomy with categorized notifications
 
 Everything runs on-device. Nothing leaves the machine.
 
@@ -107,13 +111,80 @@ Everything is open-source and runs locally.
 
 ---
 
+## Project structure
+
+```
+shadow/
+├── src/shadow/
+│   ├── hal/              # Hardware abstraction (CPU today)
+│   ├── memory/           # SQLite + vectors + knowledge graph
+│   │   └── migrations/   # Versioned schema migrations
+│   ├── models/           # Model download and cache
+│   ├── perception/       # Observation sources
+│   ├── ui/               # PySide6 widgets
+│   ├── config.py
+│   ├── errors.py
+│   └── main.py
+├── tests/                # Pytest suite
+├── scripts/              # Dev tooling
+│   ├── checks/           # Inspection scripts
+│   └── data/             # Model and fixture tooling
+├── docs/                 # Architecture, decisions, guides
+└── config.yaml
+```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture
+and [`docs/DECISIONS.md`](docs/DECISIONS.md) for why things are the way they
+are.
+
+---
+
 ## Tests
 
 ```powershell
 pytest
 ```
 
-The suite covers local memory, consent handling, perception sources, entity extraction, and the observer loop.
+The suite covers local memory, consent handling, perception sources, entity
+extraction, migrations, model management, error routing, retention, and crash
+recovery.
+
+Pytest markers:
+
+- `slow` — loads models (skipped in dev, run manually when needed)
+- `hardware("name")` — requires specific hardware
+- `injection` — security scenarios
+- `network` — network isolation checks
+
+Run fast tests only:
+
+```powershell
+pytest -m "not slow and not hardware and not injection"
+```
+
+---
+
+## Useful dev scripts
+
+```powershell
+# Inspection
+python scripts/checks/check_schema.py        # DB schema version and row counts
+python scripts/checks/check_wal.py           # verify WAL mode is active
+python scripts/checks/check_retention.py     # last prune time and counts
+python scripts/checks/check_graph.py         # knowledge graph snapshot
+python scripts/checks/check_documents.py     # document observation status
+python scripts/checks/check_calendar.py      # calendar observation status
+python scripts/checks/check_typing.py        # typing dynamics observations
+python scripts/checks/find_debug_prints.py   # scan for leftover debug code
+
+# Tooling
+python scripts/manage_models.py list         # model status
+python scripts/data/seed_demo_observations.py  # populate test data
+python scripts/data/make_test_calendar.py    # generate a test .ics file
+python scripts/check_install.py              # verify editable install
+python scripts/check_network_isolation.py    # verify no network calls in core
+python scripts/run_benchmarks.py             # latency benchmarks
+```
 
 ---
 
@@ -145,7 +216,13 @@ If you'd like to discuss licensing, open an issue.
 
 The full design specification is **not included in this repository**. It is maintained privately during development.
 
-If you'd like to know more about the direction of the project for collaboration, research, or press purposes, contact me via GitHub.
+Public design docs that *are* included:
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how SHADOW is built
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — why it's built that way
+- [`docs/PERCEPTION.md`](docs/PERCEPTION.md) — perception sources reference
+- [`docs/CALENDAR.md`](docs/CALENDAR.md) — calendar integration notes
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — public roadmap summary
 
 ---
 
