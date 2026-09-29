@@ -34,7 +34,8 @@ class WindowsCalendarSource(PerceptionSource):
         except Exception as exc:  # noqa: BLE001
             if not self._access_logged:
                 print(
-                    f"[calendar_winrt] access unavailable: {exc}",
+                    "[calendar_winrt] inactive in unpackaged builds "
+                    "(requires MSIX packaging; see docs/CALENDAR.md)",
                     file=sys.stderr,
                 )
                 self._access_logged = True

@@ -43,3 +43,6 @@ models/**/*.sha256
 
 # Model cache directory if user changes location
 .cache/shadow/
+
+# Error logs
+logs/

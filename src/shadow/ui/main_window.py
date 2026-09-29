@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 import sys
+from shadow.errors import ErrorReporter, Severity
+from shadow.ui.notifications import TrayNotifier
 
 
 class InferenceWorker(QThread):
@@ -47,11 +49,13 @@ class InferenceWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, backend, memory, config):
+    def __init__(self, backend, memory, config, reporter: ErrorReporter | None = None):
         super().__init__()
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.reporter = reporter
+        self._full_shutdown = False
         self.retriever = ShadowRetriever(self.memory, self.backend)
         self.worker = None
         self._shutting_down = False
@@ -106,10 +110,32 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.wipe_btn)
 
         self.setCentralWidget(central)
+        self._setup_tray()
         self._build_menu()  # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
 
         self._start_observer()
+
+    def _setup_tray(self):
+        self.tray = TrayNotifier(self)
+        self.tray.show_window_requested.connect(self._restore_window)
+        self.tray.quit_requested.connect(self._request_quit)
+        self.tray.show()
+
+        if self.reporter is not None:
+            self.reporter.subscribe(Severity.TRAY, self.tray.notify)
+
+    def _restore_window(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _request_quit(self):
+        from PySide6.QtWidgets import QApplication
+
+        self._full_shutdown = True
+        self.close()
+        QApplication.quit()
 
     # ---------- menu (NEW in Commit 3) ----------
 
@@ -286,22 +312,35 @@ class MainWindow(QMainWindow):
     # ---------- graceful shutdown ----------
 
     def closeEvent(self, event: QCloseEvent):
+        if not self._full_shutdown:
+            # Minimize to tray. SHADOW keeps observing.
+            event.ignore()
+            self.hide()
+            if hasattr(self, "tray"):
+                self.tray.show_minimize_hint()
+            return
+
         self._shutting_down = True
 
+        # Stop observer
         if self.observer is not None and self.observer.isRunning():
             self.observer.stop()
             if not self.observer.wait(3000):
                 print("[shadow] observer did not stop within 3 s")
 
+        # Stop inference worker
         worker = self.worker
         if worker is not None and worker.isRunning():
             worker.requestInterruption()
             if not worker.wait(3000):
-                print("[shadow] worker did not stop within 3 s; forcing exit")
+                print("[shadow] worker did not stop within 3 s")
 
         try:
             self.memory.log_activity("app_stop", "SHADOW closed")
         finally:
             self.memory.close()
+
+        if hasattr(self, "tray"):
+            self.tray.hide()
 
         event.accept()
