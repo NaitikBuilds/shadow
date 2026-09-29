@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 
 import sqlite_vec
+from .migrations import MigrationRunner
 
 
 class MemoryStore:
@@ -11,86 +12,24 @@ class MemoryStore:
         import threading
 
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.conn.enable_load_extension(False)
         self.vector_dim = vector_dim
         self._lock = threading.RLock()
-        self._init_schema()
+        self._run_migrations()
 
-    def _init_schema(self) -> None:
-        cur = self.conn.cursor()
-        cur.executescript(f"""
-            CREATE TABLE IF NOT EXISTS observations (
-                id INTEGER PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                source TEXT,
-                content TEXT,
-                metadata TEXT
-            );
-            CREATE TABLE IF NOT EXISTS intentions (
-                id INTEGER PRIMARY KEY,
-                description TEXT,
-                status TEXT,
-                due DATETIME,
-                confidence REAL
-            );
-            CREATE TABLE IF NOT EXISTS activity_log (
-                id INTEGER PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                action TEXT,
-                details TEXT
-            );
-            CREATE VIRTUAL TABLE IF NOT EXISTS vec_observations USING vec0(
-                embedding float[{self.vector_dim}]
-            );
-            CREATE TABLE IF NOT EXISTS consents (
-                channel TEXT PRIMARY KEY,
-                enabled INTEGER NOT NULL DEFAULT 0,
-                scope TEXT DEFAULT 'global',
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS consent_audit (
-                id INTEGER PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                channel TEXT,
-                action TEXT,
-                reason TEXT
-            );
-                        CREATE TABLE IF NOT EXISTS entities (
-                id INTEGER PRIMARY KEY,
-                type TEXT NOT NULL,
-                name TEXT NOT NULL,
-                first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-                mention_count INTEGER DEFAULT 1,
-                UNIQUE(type, name)
-            );
-            CREATE TABLE IF NOT EXISTS edges (
-                id INTEGER PRIMARY KEY,
-                source_id INTEGER NOT NULL,
-                target_id INTEGER NOT NULL,
-                relation TEXT NOT NULL,
-                weight REAL DEFAULT 1.0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(source_id, target_id, relation),
-                FOREIGN KEY(source_id) REFERENCES entities(id) ON DELETE CASCADE,
-                FOREIGN KEY(target_id) REFERENCES entities(id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS observation_entities (
-                observation_id INTEGER NOT NULL,
-                entity_id INTEGER NOT NULL,
-                PRIMARY KEY (observation_id, entity_id),
-                FOREIGN KEY(observation_id) REFERENCES observations(id) ON DELETE CASCADE,
-                FOREIGN KEY(entity_id) REFERENCES entities(id) ON DELETE CASCADE
-            );
-            CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
-            CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
-            CREATE INDEX IF NOT EXISTS idx_obs_entities_obs ON observation_entities(observation_id);
-            CREATE INDEX IF NOT EXISTS idx_obs_entities_ent ON observation_entities(entity_id); 
-            """)
-        self.conn.commit()
+    def _run_migrations(self) -> None:
+        """Apply versioned schema migrations.
+
+        Migrations live in src/shadow/memory/migrations/ as numbered
+        .sql files. The runner tracks the applied version in schema_meta
+        and applies any pending migrations in order.
+        """
+        runner = MigrationRunner(self.conn, self.db_path)
+        runner.run()
 
     def add_observation(self, source: str, content: str, metadata: str = "") -> int:
         cur = self.conn.cursor()
