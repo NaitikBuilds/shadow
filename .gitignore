@@ -36,3 +36,10 @@ Thumbs.db
 
 # Migration backups
 data/backups/
+
+# Model files (redundant but explicit)
+models/**/*.partial
+models/**/*.sha256
+
+# Model cache directory if user changes location
+.cache/shadow/

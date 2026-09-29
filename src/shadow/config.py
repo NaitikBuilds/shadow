@@ -63,3 +63,13 @@ def tick_interval(config: dict, mode: str | None = None) -> int:
         if "observation_interval_sec" in mode_cfg:
             return int(mode_cfg["observation_interval_sec"])
     return int(p["tick_interval_sec"])
+
+
+def models_config(config: dict) -> dict:
+    """Return the models block with safe defaults filled in."""
+    defaults = {
+        "cache_dir": "models",
+        "verify_on_load": True,
+        "auto_download_optional": False,
+    }
+    return {**defaults, **(config.get("models") or {})}

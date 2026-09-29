@@ -80,6 +80,11 @@ memory:
   db_path: "data/shadow.db"
   vector_dim: 384
 
+models:
+  cache_dir: "models"
+  verify_on_load: true
+  auto_download_optional: false  
+
 modes:
   default: "balanced"
   lite:
