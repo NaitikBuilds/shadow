@@ -62,6 +62,7 @@ perception:
     watch_folders:
       - "~/Documents"
       - "~/Downloads"
+      - "~/OneDrive/Documents"
     lookback_days: 1
     lookahead_days: 14  
 
