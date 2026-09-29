@@ -7,14 +7,12 @@ from PySide6.QtCore import QThread, Signal
 
 from shadow.config import perception_config, source_enabled, tick_interval
 from shadow.memory import EntityExtractor, GraphBuilder
-from shadow.perception import (
-    ActiveWindowSource,
-    CalendarSource,
-    DocumentSource,
-    ScreenOCRSource,
-    TypingDynamicsSource,
-    WindowsCalendarSource,
-)
+from shadow.perception.active_window import ActiveWindowSource
+from shadow.perception.calendar import CalendarSource
+from shadow.perception.calendar_winrt import WindowsCalendarSource
+from shadow.perception.documents import DocumentSource
+from shadow.perception.screen_ocr import ScreenOCRSource
+from shadow.perception.typing import TypingDynamicsSource
 
 
 class ObservationWorker(QThread):
