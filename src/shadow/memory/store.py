@@ -18,6 +18,12 @@ class MemoryStore:
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.conn.enable_load_extension(False)
+
+        # WAL mode + safety pragmas
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA foreign_keys=ON")
+
         self.vector_dim = vector_dim
         self._lock = threading.RLock()
         self._run_migrations()
@@ -217,6 +223,23 @@ class MemoryStore:
             }
             for r in cur.fetchall()
         ]
+
+        # ---------- schema_meta helpers ----------
+
+    def get_meta(self, key: str) -> str | None:
+        cur = self.conn.cursor()
+        cur.execute("SELECT value FROM schema_meta WHERE key = ?", (key,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        with self._lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
+                (key, value),
+            )
+            self.conn.commit()
 
     def close(self) -> None:
         """Close the SQLite connection (required on Windows before deleting DB)."""

@@ -8,6 +8,8 @@ from shadow.hal.cpu_backend import CpuBackend
 from shadow.memory.store import MemoryStore
 from shadow.ui.main_window import MainWindow
 
+from shadow.memory import CrashRecovery, MemoryStore, RetentionPolicy
+
 
 def main() -> int:
     import signal
@@ -33,6 +35,26 @@ def main() -> int:
         embedder_model=config["model"].get("embedder_model"),
         embedder_tokenizer=config["model"].get("embedder_tokenizer"),
     )
+
+    # Startup recovery — detects crashes, repairs orphan observations
+    try:
+        recovery = CrashRecovery(memory, backend, config)
+        rec_summary = recovery.run_startup_recovery()
+        if rec_summary.get("shutdown_status") == "unexpected":
+            reporter.tray(
+                "app",
+                "SHADOW recovered from an unexpected shutdown.",
+                user_action="Everything looks fine.",
+            )
+    except Exception as exc:  # noqa: BLE001
+        reporter.silent("recovery", f"startup recovery failed: {exc}", exc=exc)
+
+    # Retention pruning — runs at most once per interval
+    try:
+        policy = RetentionPolicy(memory, config)
+        policy.maybe_run()
+    except Exception as exc:  # noqa: BLE001
+        reporter.silent("retention", f"pruning failed: {exc}", exc=exc)
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)

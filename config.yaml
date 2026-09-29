@@ -85,6 +85,14 @@ models:
   verify_on_load: true
   auto_download_optional: false  
 
+retention:
+  observations_days: 0          # 0 = keep forever
+  low_value_days: 7             # prune empty/short observations after N days
+  activity_days: 180            # 0 = keep forever
+  error_logs_days: 30
+  orphan_observation_hours: 24
+  prune_interval_hours: 24  
+
 modes:
   default: "balanced"
   lite:

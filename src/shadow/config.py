@@ -74,3 +74,16 @@ def models_config(config: dict) -> dict:
         "auto_download_optional": False,
     }
     return {**defaults, **(config.get("models") or {})}
+
+
+def retention_config(config: dict) -> dict:
+    """Return the retention block with safe defaults filled in."""
+    defaults = {
+        "observations_days": 0,
+        "low_value_days": 7,
+        "activity_days": 180,
+        "error_logs_days": 30,
+        "orphan_observation_hours": 24,
+        "prune_interval_hours": 24,
+    }
+    return {**defaults, **(config.get("retention") or {})}
