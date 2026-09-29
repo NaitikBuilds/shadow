@@ -1,4 +1,4 @@
-from shadow.config import load_config, consent_channels, is_consented
+from shadow.config import consent_channels, is_consented, load_config
 
 
 def test_consent_channels_present():

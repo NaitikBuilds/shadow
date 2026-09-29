@@ -1,7 +1,8 @@
 """Confirm `shadow` is loading from the source tree, not site-packages."""
 
-import shadow
 from pathlib import Path
+
+import shadow
 
 src_root = Path(__file__).resolve().parents[1] / "src"
 loaded_from = Path(shadow.__file__).resolve()

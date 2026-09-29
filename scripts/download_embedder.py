@@ -1,5 +1,6 @@
 """Download the ONNX MiniLM embedder + tokenizer."""
 from pathlib import Path
+
 import requests
 
 BASE = "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main"

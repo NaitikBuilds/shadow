@@ -1,5 +1,4 @@
-from shadow.memory import EntityExtractor, GraphBuilder
-from shadow.memory import MemoryStore
+from shadow.memory import EntityExtractor, GraphBuilder, MemoryStore
 
 
 def make_extractor(projects=None):
@@ -71,7 +70,6 @@ def test_graph_builder_links_and_edges(tmp_path):
 
         # Co-occurrence edge should exist
         shadow = store.entity_by_name("project", "SHADOW")
-        naitik = store.entity_by_name("topic", "Naitik")
         # Naitik may come out as topic if not in known_projects
         assert shadow is not None
         # Check that at least one co_occurs edge exists somewhere

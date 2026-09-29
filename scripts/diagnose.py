@@ -1,7 +1,6 @@
 """Quick diagnostic for SHADOW memory + retrieval."""
 
 import sqlite3
-import sys
 import traceback
 
 import sqlite_vec

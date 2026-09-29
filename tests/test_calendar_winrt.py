@@ -141,7 +141,6 @@ def test_sample_returns_none_in_unpackaged_build():
 def test_uid_dedupe():
     """Two calls with the same event should only emit once."""
     src = WindowsCalendarSource()
-    start = datetime.now() + timedelta(hours=1)
 
     class FakeStore:
         pass

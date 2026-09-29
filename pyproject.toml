@@ -49,5 +49,26 @@ where = ["src"]
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",
+    "B008",
+    "SIM108",
+    "SIM105",
+    "SIM102",
+    "B027",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: tests that load models or take >1s (deselect with -m 'not slow')",
+    "hardware(name): requires specific hardware, e.g. @pytest.mark.hardware('snapdragon')",
+    "injection: prompt-injection security scenarios",
+    "network: verifies network isolation",
+]
+addopts = "-ra --strict-markers"

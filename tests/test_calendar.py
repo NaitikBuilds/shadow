@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import pytest
-
 from shadow.perception import CalendarSource, PerceptionSource
 
 

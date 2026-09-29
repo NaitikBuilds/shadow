@@ -1,10 +1,7 @@
+import sys
+
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent, QTextCursor
-from shadow.ui.indicator import ObservationIndicator
-from shadow.ui.privacy_dashboard import PrivacyDashboard
-from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
-from shadow.memory.retriever import ShadowRetriever
-from shadow.perception import ObservationWorker
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,  # NEW in Commit 3
@@ -17,9 +14,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-import sys
+
 from shadow.errors import ErrorReporter, Severity
+from shadow.memory.retriever import ShadowRetriever
+from shadow.perception import ObservationWorker
+from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
+from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.notifications import TrayNotifier
+from shadow.ui.privacy_dashboard import PrivacyDashboard
 
 
 class InferenceWorker(QThread):

@@ -46,3 +46,6 @@ models/**/*.sha256
 
 # Error logs
 logs/
+
+# Benchmark history (regenerated locally)
+benchmarks/results.jsonl

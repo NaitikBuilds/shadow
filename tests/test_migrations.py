@@ -1,12 +1,9 @@
 import sqlite3
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from shadow.memory import MemoryStore
 from shadow.memory.migrations import MigrationRunner
-from shadow.memory.migrations.runner import MigrationError
 
 
 @pytest.fixture
@@ -127,7 +124,7 @@ def test_backup_retention(tmp_path, monkeypatch):
         runner = MigrationRunner(store.conn, db_path)
 
         # Force 5 backups manually
-        for i in range(5):
+        for _ in range(5):
             runner._backup(0)
 
         backups = sorted((tmp_path / "backups").glob("shadow_v*.db"))

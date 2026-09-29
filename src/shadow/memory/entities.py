@@ -1,5 +1,5 @@
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 # Words that look like proper nouns but aren't useful entities.
 _STOPWORDS = {
@@ -53,7 +53,6 @@ _STOPWORDS = {
     "Tomorrow",
     "Yesterday",
     "Now",
-    "Then",
     "Here",
     "There",
     "Yes",

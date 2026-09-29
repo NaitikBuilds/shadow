@@ -6,12 +6,7 @@ import time
 from PySide6.QtCore import QThread, Signal
 
 from shadow.config import perception_config, source_enabled, tick_interval
-from shadow.perception import ActiveWindowSource, ScreenOCRSource
-
 from shadow.memory import EntityExtractor, GraphBuilder
-
-from shadow.perception import ActiveWindowSource, ScreenOCRSource, TypingDynamicsSource
-
 from shadow.perception import (
     ActiveWindowSource,
     CalendarSource,

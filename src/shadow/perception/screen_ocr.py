@@ -21,9 +21,7 @@ def _looks_like_real_text(text: str) -> bool:
         return False
     # Heuristic: too many isolated uppercase runs like "FullyQuaIifiedError"
     upper_runs = sum(1 for c in stripped if c.isupper())
-    if upper_runs / max(letters, 1) > 0.35:
-        return False
-    return True
+    return upper_runs / max(letters, 1) <= 0.35
 
 
 class ScreenOCRSource(PerceptionSource):
@@ -55,8 +53,8 @@ class ScreenOCRSource(PerceptionSource):
 
     async def _capture_and_ocr(self) -> str:
         try:
-            from PIL import ImageGrab
             import win32gui
+            from PIL import ImageGrab
             from winrt.windows.globalization import Language
             from winrt.windows.graphics.imaging import BitmapDecoder
             from winrt.windows.media.ocr import OcrEngine

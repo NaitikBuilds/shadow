@@ -23,6 +23,6 @@ class PerceptionSource(ABC):
         """
         ...
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # noqa: B027
         """Optional cleanup. Called when the observer stops."""
-        pass
+        return None

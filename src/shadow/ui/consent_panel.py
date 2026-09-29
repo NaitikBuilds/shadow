@@ -95,6 +95,6 @@ class ConsentPanel(QWidget):
         self.consent_changed.emit(channel, enabled)
 
     def _disable_all(self):
-        for channel, cb in self.checkboxes.items():
+        for _channel, cb in self.checkboxes.items():
             if cb.isChecked():
                 cb.setChecked(False)  # triggers _on_toggle

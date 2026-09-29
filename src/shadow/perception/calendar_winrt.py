@@ -31,7 +31,7 @@ class WindowsCalendarSource(PerceptionSource):
 
         try:
             appointments = asyncio.run(self._load_appointments())
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             if not self._access_logged:
                 print(
                     "[calendar_winrt] inactive in unpackaged builds "

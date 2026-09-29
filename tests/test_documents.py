@@ -1,6 +1,4 @@
-from pathlib import Path
 
-import pytest
 
 from shadow.perception import DocumentSource, PerceptionSource
 
@@ -76,7 +74,8 @@ def test_most_recent_wins(tmp_path):
     new = tmp_path / "new.txt"
     new.write_text("new content " * 20, encoding="utf-8")
     # Force new to look more recent
-    import os, time
+    import os
+    import time
 
     time.sleep(0.01)
     os.utime(new, None)

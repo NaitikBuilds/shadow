@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Callable, Optional
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     SILENT = "silent"  # logged only
     BADGE = "badge"  # transient UI indicator
     TRAY = "tray"  # system tray notification

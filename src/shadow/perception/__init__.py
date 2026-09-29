@@ -1,13 +1,13 @@
 """SHADOW perception layer — sources that observe the user's context."""
 
+from .active_window import ActiveWindow, ActiveWindowSource
 from .base import PerceptionSource
-from .active_window import ActiveWindowSource, ActiveWindow
-from .screen_ocr import ScreenOCRSource
-from .typing import TypingDynamicsSource
-from .documents import DocumentSource
 from .calendar import CalendarSource
 from .calendar_winrt import WindowsCalendarSource
+from .documents import DocumentSource
 from .observer import ObservationWorker
+from .screen_ocr import ScreenOCRSource
+from .typing import TypingDynamicsSource
 
 __all__ = [
     "PerceptionSource",

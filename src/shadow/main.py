@@ -11,6 +11,7 @@ from shadow.ui.main_window import MainWindow
 
 def main() -> int:
     import signal
+
     from PySide6.QtCore import QTimer
 
     config = load_config()

@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 
 import sqlite_vec
+
 from .migrations import MigrationRunner
 
 
