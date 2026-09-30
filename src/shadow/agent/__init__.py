@@ -1,5 +1,6 @@
 """SHADOW agent layer — proactive features that act on memory."""
 
+from .decay import KnowledgeDecayEngine
 from .focus import FocusShield, FocusState
 from .forecasting import ForecastingEngine
 from .insight import Insight
@@ -11,6 +12,7 @@ __all__ = [
     "FocusState",
     "ForecastingEngine",
     "Insight",
+    "KnowledgeDecayEngine",
     "PromptBuilder",
     "RecoveryEngine",
 ]

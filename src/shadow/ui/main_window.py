@@ -15,7 +15,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from shadow.agent import FocusShield, ForecastingEngine, PromptBuilder, RecoveryEngine
+from shadow.agent import (
+    FocusShield,
+    ForecastingEngine,
+    KnowledgeDecayEngine,
+    PromptBuilder,
+    RecoveryEngine,
+)
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
@@ -61,6 +67,7 @@ class MainWindow(QMainWindow):
         self.recovery_engine = RecoveryEngine(self.memory)
         self.focus_shield = FocusShield(self.memory)
         self.forecasting_engine = ForecastingEngine(self.memory)
+        self.decay_engine = KnowledgeDecayEngine(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -197,7 +204,11 @@ class MainWindow(QMainWindow):
         dlg.resize(560, 620)
         layout = QVBoxLayout(dlg)
         panel = InsightPanel(
-            engines=[self.recovery_engine, self.forecasting_engine],
+            engines=[
+                self.recovery_engine,
+                self.forecasting_engine,
+                self.decay_engine,
+            ],
             focus_shield=self.focus_shield,
         )
         layout.addWidget(panel)
