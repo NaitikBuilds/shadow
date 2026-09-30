@@ -23,6 +23,7 @@ from shadow.agent import (
     PromptBuilder,
     QuickCapture,
     RecoveryEngine,
+    SessionMemory,
     TaintPropagator,
 )
 from shadow.errors import ErrorReporter, Severity
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
         self.quick_capture = QuickCapture(self.memory, self.config)
         self.quick_capture.on_capture = self._on_quick_capture
         self.quick_capture.start()
+        self.session_memory = SessionMemory(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -355,6 +357,14 @@ class MainWindow(QMainWindow):
         except Exception:
             observations = []
 
+        session_extra = ""
+        try:
+            current = self.session_memory.current_session()
+            if current is not None:
+                session_extra = self.session_memory.resume_summary(current)
+        except Exception:
+            session_extra = ""
+
         temporal_extra = ""
         for window in ("last month", "yesterday", "last week", "today"):
             if window in user_prompt.lower():
@@ -370,10 +380,13 @@ class MainWindow(QMainWindow):
                     temporal_extra = f"Observations from {window}:\n" + "\n".join(lines)
                 break
 
+        combined_extra = "\n\n".join(
+            part for part in (session_extra, temporal_extra) if part
+        )
         return self.prompt_builder.build(
             user_query=user_prompt,
             observations=observations,
-            extra_context=temporal_extra,
+            extra_context=combined_extra,
         )
 
     # ---------- graceful shutdown ----------
