@@ -6,6 +6,7 @@ from .forecasting import ForecastingEngine
 from .insight import Insight
 from .prompt_builder import PromptBuilder
 from .recovery import RecoveryEngine
+from .taint import Taint, TaintedValue, TaintPropagator, max_taint
 
 __all__ = [
     "FocusShield",
@@ -15,4 +16,8 @@ __all__ = [
     "KnowledgeDecayEngine",
     "PromptBuilder",
     "RecoveryEngine",
+    "Taint",
+    "TaintedValue",
+    "TaintPropagator",
+    "max_taint",
 ]

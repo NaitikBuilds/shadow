@@ -21,6 +21,7 @@ from shadow.agent import (
     KnowledgeDecayEngine,
     PromptBuilder,
     RecoveryEngine,
+    TaintPropagator,
 )
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
@@ -68,6 +69,7 @@ class MainWindow(QMainWindow):
         self.focus_shield = FocusShield(self.memory)
         self.forecasting_engine = ForecastingEngine(self.memory)
         self.decay_engine = KnowledgeDecayEngine(self.memory)
+        self.taint = TaintPropagator()
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -281,6 +283,11 @@ class MainWindow(QMainWindow):
         if not prompt:
             return
         self.input.clear()
+
+        try:
+            self.taint.remember_user_input(prompt)
+        except Exception:
+            pass
 
         augmented = self._build_prompt_with_context(prompt)
 
