@@ -4,9 +4,9 @@ import hashlib
 import os
 import shutil
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
 
 from .registry import MODELS, ModelSpec
 
@@ -122,7 +122,7 @@ class ModelManager:
 
     def _download_with_retry(self, spec: ModelSpec) -> DownloadResult:
         last_exc: Exception | None = None
-        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+        for _attempt, delay in enumerate([0] + RETRY_DELAYS):
             if delay:
                 time.sleep(delay)
             try:

@@ -3,10 +3,9 @@ from pathlib import Path
 
 import pytest
 
+from shadow.memory import MemoryStore
 from shadow.models import MODELS, ModelManager
 from shadow.models.manager import ModelManager as MM
-
-from shadow.memory import MemoryStore
 
 
 @pytest.fixture

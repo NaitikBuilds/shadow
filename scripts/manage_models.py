@@ -15,11 +15,9 @@ from pathlib import Path
 # Ensure src/ is importable when running from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from shadow.models import MODELS, ModelManager  # noqa: E402
-
 from shadow.config import load_config  # noqa: E402
 from shadow.memory import MemoryStore  # noqa: E402
-from shadow.models.manager import ModelManager as MM  # noqa: E402
+from shadow.models import MODELS, ModelManager  # noqa: E402
 
 
 def _make_manager() -> ModelManager:

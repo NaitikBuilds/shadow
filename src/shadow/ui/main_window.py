@@ -15,11 +15,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from shadow.agent import RecoveryEngine
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.ui.indicator import ObservationIndicator
+from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
 from shadow.ui.privacy_dashboard import PrivacyDashboard
 
@@ -56,6 +58,7 @@ class MainWindow(QMainWindow):
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.recovery_engine = RecoveryEngine(self.memory)
         self.reporter = reporter
         self._full_shutdown = False
         self.retriever = ShadowRetriever(self.memory, self.backend)
@@ -151,6 +154,9 @@ class MainWindow(QMainWindow):
         privacy_action = settings_menu.addAction("Privacy Dashboard…")
         privacy_action.triggered.connect(self.open_privacy_dashboard)
 
+        insights_action = settings_menu.addAction("Insights…")
+        insights_action.triggered.connect(self.open_insights_panel)
+
     def open_consent_panel(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("SHADOW — Consent")
@@ -180,6 +186,17 @@ class MainWindow(QMainWindow):
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
 
+        dlg.exec()
+
+    def open_insights_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Insights")
+        dlg.resize(560, 620)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(InsightPanel(self.recovery_engine))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
         dlg.exec()
 
     def _on_consent_changed(self, channel: str, enabled: bool):
