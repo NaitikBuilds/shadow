@@ -5,6 +5,7 @@ consent:
   calendar: false # calendar ingestion
   typing_dynamics: false # pause patterns, rhythm
   webcam_posture: false # optional coarse affect (heavily gated)
+  clipboard: false
 
 observation:
   indicator_enabled: true
@@ -36,6 +37,7 @@ perception:
     typing_dynamics: true
     document_watch: true
     calendar: true
+    clipboard: true
 
   budget:
     enabled: true

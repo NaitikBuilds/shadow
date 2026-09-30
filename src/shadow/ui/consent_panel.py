@@ -34,6 +34,11 @@ CHANNEL_META = {
         "Webcam (posture)",
         "Optional coarse posture signal. Very coarse — no images are stored.",
     ),
+    "clipboard": (
+        "Clipboard",
+        "Detects what you copy. Passwords, API keys, and tokens are "
+        "automatically filtered out.",
+    ),
 }
 
 

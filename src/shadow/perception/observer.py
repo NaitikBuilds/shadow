@@ -11,6 +11,7 @@ from shadow.perception.active_window import ActiveWindowSource
 from shadow.perception.budget import BudgetController
 from shadow.perception.calendar import CalendarSource
 from shadow.perception.calendar_winrt import WindowsCalendarSource
+from shadow.perception.clipboard import ClipboardSource
 from shadow.perception.documents import DocumentSource
 from shadow.perception.screen_ocr import ScreenOCRSource
 from shadow.perception.typing import TypingDynamicsSource
@@ -84,6 +85,9 @@ class ObservationWorker(QThread):
                     lookahead_days=ccfg.get("lookahead_days", 14),
                 )
             )
+
+        if source_enabled(config, "clipboard"):
+            self.sources.append(ClipboardSource())
 
         self.graph_builder: GraphBuilder | None = None
         ee_cfg = self.pcfg.get("entity_extraction") or {}
@@ -214,6 +218,12 @@ class ObservationWorker(QThread):
             return f"Document: {name}\n{text}"
         if source_name in ("calendar", "calendar_winrt"):
             return (payload.get("content") or "").strip()
+        if source_name == "clipboard":
+            text = (payload.get("content") or "").strip()
+            if len(text) < 10:
+                return ""
+            preview = text[:500]
+            return f"Clipboard ({payload.get('chars', 0)} chars):\n{preview}"
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:

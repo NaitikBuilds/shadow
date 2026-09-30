@@ -37,6 +37,7 @@ def perception_config(config: dict) -> dict:
             "typing_dynamics": True,
             "document_watch": True,
             "calendar": True,
+            "clipboard": True,
         },
         "max_title_length": 200,
         "min_title_length": 3,
