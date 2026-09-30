@@ -37,6 +37,16 @@ perception:
     document_watch: true
     calendar: true
 
+  budget:
+    enabled: true
+    active_multiplier: 0.7
+    idle_multiplier: 1.5
+    battery_multiplier: 1.5
+    low_battery_threshold: 20
+    low_battery_multiplier: 2.0
+    min_interval_sec: 5
+    max_interval_sec: 180  
+
   # Guardrails
   max_title_length: 200
   min_title_length: 3            # ignore "untitled", empty titles, etc.  

@@ -87,3 +87,19 @@ def retention_config(config: dict) -> dict:
         "prune_interval_hours": 24,
     }
     return {**defaults, **(config.get("retention") or {})}
+
+
+def budget_config(config: dict) -> dict:
+    """Return the perception.budget block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "active_multiplier": 0.7,
+        "idle_multiplier": 1.5,
+        "battery_multiplier": 1.5,
+        "low_battery_threshold": 20,
+        "low_battery_multiplier": 2.0,
+        "min_interval_sec": 5,
+        "max_interval_sec": 180,
+    }
+    user = (config.get("perception") or {}).get("budget") or {}
+    return {**defaults, **user}

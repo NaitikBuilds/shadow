@@ -5,9 +5,10 @@ import time
 
 from PySide6.QtCore import QThread, Signal
 
-from shadow.config import perception_config, source_enabled, tick_interval
+from shadow.config import perception_config, source_enabled
 from shadow.memory import EntityExtractor, GraphBuilder
 from shadow.perception.active_window import ActiveWindowSource
+from shadow.perception.budget import BudgetController
 from shadow.perception.calendar import CalendarSource
 from shadow.perception.calendar_winrt import WindowsCalendarSource
 from shadow.perception.documents import DocumentSource
@@ -36,6 +37,7 @@ class ObservationWorker(QThread):
         self.backend = backend
         self.config = config
         self.pcfg = perception_config(config)
+        self.budget = BudgetController(memory, config)
 
         self.sources = []
         if source_enabled(config, "active_window"):
@@ -119,7 +121,7 @@ class ObservationWorker(QThread):
             self._tick_count += 1
             self.tick.emit(self._tick_count)
 
-            interval = tick_interval(self.config, self._current_mode)
+            interval = self.budget.effective_interval(self._current_mode)
             # Sleep in 100 ms slices so interruption is responsive
             slept = 0.0
             while slept < interval:
