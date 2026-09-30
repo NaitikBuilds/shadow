@@ -105,6 +105,11 @@ retention:
   orphan_observation_hours: 24
   prune_interval_hours: 24  
 
+capture:
+  enabled: true
+  hotkey: "<ctrl>+<shift>+s"
+  output_dir: "~/SHADOW_workspace/captures"  
+
 modes:
   default: "balanced"
   lite:

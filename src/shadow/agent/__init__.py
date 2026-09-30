@@ -1,5 +1,6 @@
 """SHADOW agent layer — proactive features that act on memory."""
 
+from .capture import QuickCapture
 from .clipboard_actions import ClipboardActionsEngine
 from .decay import KnowledgeDecayEngine
 from .focus import FocusShield, FocusState
@@ -18,6 +19,7 @@ __all__ = [
     "Insight",
     "KnowledgeDecayEngine",
     "PromptBuilder",
+    "QuickCapture",
     "RecoveryEngine",
     "StyleMirrorEngine",
     "StyleResult",

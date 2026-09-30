@@ -104,3 +104,13 @@ def budget_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("budget") or {}
     return {**defaults, **user}
+
+
+def capture_config(config: dict) -> dict:
+    """Return the capture block with safe defaults filled in."""
+    defaults = {
+        "enabled": True,
+        "hotkey": "<ctrl>+<shift>+s",
+        "output_dir": "~/SHADOW_workspace/captures",
+    }
+    return {**defaults, **(config.get("capture") or {})}

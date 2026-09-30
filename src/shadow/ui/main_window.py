@@ -21,6 +21,7 @@ from shadow.agent import (
     ForecastingEngine,
     KnowledgeDecayEngine,
     PromptBuilder,
+    QuickCapture,
     RecoveryEngine,
     TaintPropagator,
 )
@@ -72,6 +73,9 @@ class MainWindow(QMainWindow):
         self.decay_engine = KnowledgeDecayEngine(self.memory)
         self.taint = TaintPropagator()
         self.clipboard_actions = ClipboardActionsEngine(self.memory)
+        self.quick_capture = QuickCapture(self.memory, self.config)
+        self.quick_capture.on_capture = self._on_quick_capture
+        self.quick_capture.start()
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -265,6 +269,20 @@ class MainWindow(QMainWindow):
         self.observer_status.setText(f"Observer error: {message[:80]}")
         self.memory.log_activity("observer_error", message[:120])
 
+    def _on_quick_capture(self, path: str):
+        try:
+            if hasattr(self, "tray"):
+                self.tray.tray.showMessage(
+                    "SHADOW — Captured",
+                    path,
+                )
+        except Exception:
+            pass
+        try:
+            self.memory.log_activity("quick_capture", path)
+        except Exception:
+            pass
+
     # ---------- query flow ----------
 
     def send_query(self):
@@ -376,6 +394,10 @@ class MainWindow(QMainWindow):
             self.observer.stop()
             if not self.observer.wait(3000):
                 print("[shadow] observer did not stop within 3 s")
+
+        # Stop quick capture hotkey listener
+        if hasattr(self, "quick_capture"):
+            self.quick_capture.stop()
 
         # Stop inference worker
         worker = self.worker
