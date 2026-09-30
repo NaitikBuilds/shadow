@@ -62,8 +62,6 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
-"scripts/manage_models.py" = ["E402", "I001"]
-"tests/test_model_manager.py" = ["I001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
