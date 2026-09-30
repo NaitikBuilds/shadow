@@ -73,12 +73,12 @@ def check() -> int:
             violations.append((rel, bad))
 
     if not violations:
-        print("✓ Network isolation check passed.")
+        print("[OK] Network isolation check passed.")
         print(f"  Scanned: {SRC_ROOT}")
         print(f"  Whitelisted: {sorted(WHITELIST) + list(WHITELIST_PREFIXES)}")
         return 0
 
-    print("✗ Network isolation violated.")
+    print("[FAIL] Network isolation violated.")
     print("  The following files import network modules outside the whitelist:")
     for rel, mods in violations:
         print(f"    {rel}: {sorted(mods)}")

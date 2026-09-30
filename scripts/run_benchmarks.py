@@ -80,14 +80,14 @@ def compare(new: dict, old: dict) -> int:
         cur = new.get(field)
         if prev and cur and cur > prev * 1.15:
             pct = (cur / prev - 1) * 100
-            regressions.append(f"  {field}: {prev} → {cur} (+{pct:.1f}%)")
+            regressions.append(f"  {field}: {prev} -> {cur} (+{pct:.1f}%)")
 
     if regressions:
-        print("✗ Performance regression detected:")
+        print("[FAIL] Performance regression detected:")
         print("\n".join(regressions))
         return 1
 
-    print("✓ No regression > 15%.")
+    print("[OK] No regression > 15%.")
     return 0
 
 
