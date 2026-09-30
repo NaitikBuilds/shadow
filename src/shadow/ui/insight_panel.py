@@ -15,9 +15,9 @@ class InsightPanel(QWidget):
     high-confidence insights.
     """
 
-    def __init__(self, recovery_engine, focus_shield=None):
+    def __init__(self, engines=None, focus_shield=None):
         super().__init__()
-        self.recovery_engine = recovery_engine
+        self.engines = engines or []
         self.focus_shield = focus_shield
 
         layout = QVBoxLayout(self)
@@ -47,10 +47,24 @@ class InsightPanel(QWidget):
             if w is not None:
                 w.deleteLater()
 
-        try:
-            insights = self.recovery_engine.find_unfinished()
-        except Exception:
-            insights = []
+        insights = []
+        for engine in self.engines:
+            try:
+                insights.extend(
+                    engine.forecast()
+                    if hasattr(engine, "forecast")
+                    else engine.find_unfinished()
+                )
+            except Exception:
+                continue
+
+        # Dedupe by title, keep highest score
+        best = {}
+        for i in insights:
+            existing = best.get(i.title)
+            if existing is None or i.score > existing.score:
+                best[i.title] = i
+        insights = sorted(best.values(), key=lambda i: i.score, reverse=True)
 
         state = "normal"
         if self.focus_shield is not None:
