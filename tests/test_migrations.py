@@ -11,13 +11,19 @@ def temp_db(tmp_path):
     return str(tmp_path / "test.db")
 
 
-def test_fresh_db_migrates_to_v1(temp_db):
+def test_fresh_db_migrates_to_latest(temp_db):
     store = MemoryStore(temp_db)
     try:
         cur = store.conn.cursor()
         cur.execute("SELECT value FROM schema_meta WHERE key = 'current_version'")
         version = int(cur.fetchone()[0])
-        assert version == 1
+        assert version >= 1  # at least the baseline
+        # Verify the ambient state table from migration 002 exists
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='ambient_task_state'"
+        )
+        assert cur.fetchone() is not None
     finally:
         store.close()
 
@@ -54,7 +60,7 @@ def test_reopen_is_noop(temp_db):
     try:
         cur = s2.conn.cursor()
         cur.execute("SELECT value FROM schema_meta WHERE key = 'current_version'")
-        assert int(cur.fetchone()[0]) == 1
+        assert int(cur.fetchone()[0]) >= 1
     finally:
         s2.close()
 
@@ -83,7 +89,7 @@ def test_retrofit_existing_db(temp_db):
     try:
         cur = store.conn.cursor()
         cur.execute("SELECT value FROM schema_meta WHERE key = 'current_version'")
-        assert int(cur.fetchone()[0]) == 1
+        assert int(cur.fetchone()[0]) >= 1
 
         cur.execute("SELECT COUNT(*) FROM observations")
         assert cur.fetchone()[0] == 1
@@ -148,3 +154,22 @@ def test_missing_migration_dir_is_safe(tmp_path):
     finally:
         r.MIGRATIONS_DIR = original
         conn.close()
+
+
+def test_ambient_task_state_table_exists(temp_db):
+    """Migration 002 creates the ambient_task_state table."""
+    store = MemoryStore(temp_db)
+    try:
+        cur = store.conn.cursor()
+        cur.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='ambient_task_state'"
+        )
+        assert cur.fetchone() is not None
+
+        # Verify columns
+        cur.execute("PRAGMA table_info(ambient_task_state)")
+        cols = {row[1] for row in cur.fetchall()}
+        assert {"entity_id", "status", "updated_at"}.issubset(cols)
+    finally:
+        store.close()

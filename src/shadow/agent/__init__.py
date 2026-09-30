@@ -1,5 +1,6 @@
 """SHADOW agent layer — proactive features that act on memory."""
 
+from .ambient import AmbientTask, AmbientTaskList
 from .capture import QuickCapture
 from .clipboard_actions import ClipboardActionsEngine
 from .decay import KnowledgeDecayEngine
@@ -13,6 +14,8 @@ from .style import StyleMirrorEngine, StyleResult
 from .taint import Taint, TaintedValue, TaintPropagator, max_taint
 
 __all__ = [
+    "AmbientTask",
+    "AmbientTaskList",
     "ClipboardActionsEngine",
     "FocusShield",
     "FocusState",

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from shadow.agent import (
+    AmbientTaskList,
     ClipboardActionsEngine,
     FocusShield,
     ForecastingEngine,
@@ -29,6 +30,7 @@ from shadow.agent import (
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
+from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.insight_panel import InsightPanel
@@ -78,6 +80,7 @@ class MainWindow(QMainWindow):
         self.quick_capture.on_capture = self._on_quick_capture
         self.quick_capture.start()
         self.session_memory = SessionMemory(self.memory)
+        self.ambient_tasks = AmbientTaskList(self.memory, self.session_memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -177,6 +180,9 @@ class MainWindow(QMainWindow):
         insights_action = settings_menu.addAction("Insights…")
         insights_action.triggered.connect(self.open_insights_panel)
 
+        ambient_action = settings_menu.addAction("Working On…")
+        ambient_action.triggered.connect(self.open_ambient_panel)
+
     def open_consent_panel(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("SHADOW — Consent")
@@ -223,6 +229,17 @@ class MainWindow(QMainWindow):
             focus_shield=self.focus_shield,
         )
         layout.addWidget(panel)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_ambient_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Working On")
+        dlg.resize(560, 620)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(AmbientPanel(self.ambient_tasks))
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
