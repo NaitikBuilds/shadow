@@ -10,7 +10,7 @@ env/
 .ruff_cache/
 
 # Models (too big for git)
-models/
+/models/
 *.gguf
 *.onnx
 *.bin
