@@ -50,7 +50,9 @@ class InsightPanel(QWidget):
         insights = []
         for engine in self.engines:
             try:
-                if hasattr(engine, "find_decaying"):
+                if hasattr(engine, "suggest"):
+                    insights.extend(engine.suggest())
+                elif hasattr(engine, "find_decaying"):
                     insights.extend(engine.find_decaying())
                 elif hasattr(engine, "forecast"):
                     insights.extend(engine.forecast())

@@ -16,6 +16,7 @@ class Insight:
     score: float = 0.5
     action: str = ""
     entity_id: int | None = None
+    bypass_focus_shield: bool = False
     created_at: str = field(
         default_factory=lambda: datetime.utcnow().isoformat(sep=" ", timespec="seconds")
     )
@@ -28,5 +29,6 @@ class Insight:
             "score": self.score,
             "action": self.action,
             "entity_id": self.entity_id,
+            "bypass_focus_shield": self.bypass_focus_shield,
             "created_at": self.created_at,
         }

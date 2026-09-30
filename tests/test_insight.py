@@ -29,5 +29,6 @@ def test_insight_to_dict():
         "score",
         "action",
         "entity_id",
+        "bypass_focus_shield",
         "created_at",
     }

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from shadow.agent import (
+    ClipboardActionsEngine,
     FocusShield,
     ForecastingEngine,
     KnowledgeDecayEngine,
@@ -70,6 +71,7 @@ class MainWindow(QMainWindow):
         self.forecasting_engine = ForecastingEngine(self.memory)
         self.decay_engine = KnowledgeDecayEngine(self.memory)
         self.taint = TaintPropagator()
+        self.clipboard_actions = ClipboardActionsEngine(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -207,6 +209,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dlg)
         panel = InsightPanel(
             engines=[
+                self.clipboard_actions,
                 self.recovery_engine,
                 self.forecasting_engine,
                 self.decay_engine,
