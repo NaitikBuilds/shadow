@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from shadow.agent import RecoveryEngine
+from shadow.agent import PromptBuilder, RecoveryEngine
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         self.config = config
         self.recovery_engine = RecoveryEngine(self.memory)
         self.reporter = reporter
+        self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
         self.retriever = ShadowRetriever(self.memory, self.backend)
         self.worker = None
@@ -303,29 +304,31 @@ class MainWindow(QMainWindow):
         self.memory.log_activity("wipe", "Full Shadow wipe executed")
 
     def _build_prompt_with_context(self, user_prompt: str) -> str:
-        # 1) Always try semantic retrieval.
-        context = self.retriever.context_for(user_prompt, k=5)
+        observations = []
+        try:
+            observations = self.retriever.semantic(user_prompt, k=3)
+        except Exception:
+            observations = []
 
-        # 2) Also check for temporal keywords.
+        temporal_extra = ""
         for window in ("last month", "yesterday", "last week", "today"):
             if window in user_prompt.lower():
-                temporal = self.retriever.temporal(window)
+                try:
+                    temporal = self.retriever.temporal(window)
+                except Exception:
+                    temporal = []
                 if temporal:
-                    lines = "\n".join(
+                    lines = [
                         f"- [{o['timestamp']}] {o['content'][:150]}"
                         for o in temporal[:5]
-                    )
-                    context = (context + "\n\n" if context else "") + (
-                        f"Observations from {window}:\n{lines}"
-                    )
+                    ]
+                    temporal_extra = f"Observations from {window}:\n" + "\n".join(lines)
                 break
 
-        if not context:
-            return user_prompt
-        return (
-            "You are answering using the user's own past observations. "
-            "Use them if relevant; ignore them if not.\n\n"
-            f"{context}\n\nUser question: {user_prompt}"
+        return self.prompt_builder.build(
+            user_query=user_prompt,
+            observations=observations,
+            extra_context=temporal_extra,
         )
 
     # ---------- graceful shutdown ----------
