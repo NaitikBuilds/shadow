@@ -9,14 +9,23 @@ from PySide6.QtWidgets import (
 
 
 class InsightPanel(QWidget):
-    """Displays a list of Insight objects as cards."""
+    """Displays a list of Insight objects as cards.
 
-    def __init__(self, recovery_engine):
+    Consulted through FocusShield so deep-work sessions only surface
+    high-confidence insights.
+    """
+
+    def __init__(self, recovery_engine, focus_shield=None):
         super().__init__()
         self.recovery_engine = recovery_engine
+        self.focus_shield = focus_shield
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("<h2>Insights</h2>"))
+
+        self.focus_label = QLabel()
+        self.focus_label.setStyleSheet("color: #888; padding: 2px 0;")
+        layout.addWidget(self.focus_label)
 
         refresh = QPushButton("Refresh")
         refresh.clicked.connect(self.refresh)
@@ -43,8 +52,21 @@ class InsightPanel(QWidget):
         except Exception:
             insights = []
 
+        state = "normal"
+        if self.focus_shield is not None:
+            try:
+                state = self.focus_shield.current_state().value
+                insights = self.focus_shield.filter(insights)
+            except Exception:
+                state = "normal"
+
+        self.focus_label.setText(f"Focus state: {state}")
+
         if not insights:
-            empty = QLabel("No insights right now.")
+            text = "No insights right now."
+            if state == "focused":
+                text = "Focus mode active — only high-confidence insights shown."
+            empty = QLabel(text)
             empty.setStyleSheet("color: #888; padding: 12px;")
             self.inner_layout.addWidget(empty)
             self.inner_layout.addStretch()
