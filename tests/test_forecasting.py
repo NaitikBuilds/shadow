@@ -16,7 +16,7 @@ def store(tmp_path):
 def add_observation(
     store, minutes_ago: int, source: str, content: str, metadata: str = ""
 ):
-    ts = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat(
+    ts = (datetime.utcnow() - timedelta(minutes=minutes_ago)).isoformat(
         sep=" ", timespec="seconds"
     )
     cur = store.conn.cursor()
@@ -34,7 +34,7 @@ def test_empty_store_returns_nothing(store):
 
 
 def test_upcoming_calendar_event_flagged(store):
-    start = datetime.now() + timedelta(minutes=20)
+    start = datetime.utcnow() + timedelta(minutes=20)
     content = (
         f"Calendar event (upcoming): Team standup "
         f"from {start.strftime('%Y-%m-%d %H:%M')} "
@@ -48,7 +48,7 @@ def test_upcoming_calendar_event_flagged(store):
 
 
 def test_far_calendar_event_not_flagged(store):
-    start = datetime.now() + timedelta(hours=5)
+    start = datetime.utcnow() + timedelta(hours=5)
     content = (
         f"Calendar event (upcoming): Later event "
         f"from {start.strftime('%Y-%m-%d %H:%M')} "
@@ -88,7 +88,7 @@ def test_calendar_parsing_handles_malformed(store):
 
 
 def test_dedupes_by_title(store):
-    start = datetime.now() + timedelta(minutes=15)
+    start = datetime.utcnow() + timedelta(minutes=15)
     content = (
         f"Calendar event (upcoming): Meeting "
         f"from {start.strftime('%Y-%m-%d %H:%M')} "

@@ -14,7 +14,7 @@ def store(tmp_path):
 
 
 def add_obs(store, minutes_ago: int, entity_name: str, entity_type="project"):
-    ts = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat(
+    ts = (datetime.utcnow() - timedelta(minutes=minutes_ago)).isoformat(
         sep=" ", timespec="seconds"
     )
     cur = store.conn.cursor()

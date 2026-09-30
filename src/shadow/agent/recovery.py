@@ -26,7 +26,7 @@ class RecoveryEngine:
         self.memory = memory
 
     def find_unfinished(self, hours: int = 24, limit: int = 5) -> list[Insight]:
-        now = datetime.now()
+        now = datetime.utcnow()
         rows = self._recent_observations(now - timedelta(hours=hours))
         if not rows:
             return []

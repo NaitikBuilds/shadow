@@ -15,7 +15,7 @@ def store(tmp_path):
 
 
 def add_typing(store, minutes_ago: float, focus_score: float):
-    ts = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat(
+    ts = (datetime.utcnow() - timedelta(minutes=minutes_ago)).isoformat(
         sep=" ", timespec="seconds"
     )
     meta = json.dumps({"focus_score": focus_score})
@@ -50,7 +50,7 @@ def test_idle_after_no_activity(store):
 
 
 def test_no_metadata_is_ignored(store):
-    ts = datetime.now().isoformat(sep=" ", timespec="seconds")
+    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
     cur = store.conn.cursor()
     cur.execute(
         "INSERT INTO observations (timestamp, source, content) "
@@ -62,7 +62,7 @@ def test_no_metadata_is_ignored(store):
 
 
 def test_malformed_metadata_is_ignored(store):
-    ts = datetime.now().isoformat(sep=" ", timespec="seconds")
+    ts = datetime.utcnow().isoformat(sep=" ", timespec="seconds")
     cur = store.conn.cursor()
     cur.execute(
         "INSERT INTO observations (timestamp, source, content, metadata) "

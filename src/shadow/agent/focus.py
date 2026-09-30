@@ -42,7 +42,7 @@ class FocusShield:
         if not rows:
             return FocusState.NORMAL
 
-        now = datetime.now()
+        now = datetime.utcnow()
         latest = rows[-1]["timestamp"]
 
         # No typing in the idle window → idle.
@@ -67,13 +67,17 @@ class FocusShield:
         """Return insights appropriate for the current state.
 
         Focused: only high-confidence insights (score >= FOCUSED_MIN_SCORE).
+        Insights with bypass_focus_shield=True always pass through.
+
         Idle: pass through (tray layer may suppress notifications separately).
         Normal: pass through.
         """
         state = self.current_state()
         if state != FocusState.FOCUSED:
             return insights
-        return [i for i in insights if i.score >= FOCUSED_MIN_SCORE]
+        return [
+            i for i in insights if i.score >= FOCUSED_MIN_SCORE or i.bypass_focus_shield
+        ]
 
     def should_notify(self) -> bool:
         """Whether tray notifications should fire right now.
@@ -88,7 +92,7 @@ class FocusShield:
     # ---------- internals ----------
 
     def _recent_typing_rows(self) -> list[dict]:
-        cutoff = (datetime.now() - timedelta(minutes=IDLE_WINDOW_MIN * 2)).isoformat(
+        cutoff = (datetime.utcnow() - timedelta(minutes=IDLE_WINDOW_MIN * 2)).isoformat(
             sep=" ", timespec="seconds"
         )
 

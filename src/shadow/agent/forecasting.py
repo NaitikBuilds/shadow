@@ -44,7 +44,7 @@ class ForecastingEngine:
     # ---------- signal 1: calendar ----------
 
     def _calendar_signals(self) -> list[Insight]:
-        now = datetime.now()
+        now = datetime.utcnow()
 
         try:
             cur = self.memory.conn.cursor()
@@ -90,7 +90,7 @@ class ForecastingEngine:
 
     def _session_signals(self) -> list[Insight]:
         cutoff = (
-            datetime.now() - timedelta(minutes=self.SESSION_WINDOW_MIN)
+            datetime.utcnow() - timedelta(minutes=self.SESSION_WINDOW_MIN)
         ).isoformat(sep=" ", timespec="seconds")
 
         try:
@@ -143,7 +143,7 @@ class ForecastingEngine:
     # ---------- signal 3: weekly patterns ----------
 
     def _pattern_signals(self) -> list[Insight]:
-        now = datetime.now()
+        now = datetime.utcnow()
         weekday = now.weekday()
         hour = now.hour
 

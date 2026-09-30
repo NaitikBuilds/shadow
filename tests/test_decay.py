@@ -20,7 +20,7 @@ def add_entity(
     mentions: int,
     days_since_last_seen: float,
 ):
-    last_seen = (datetime.now() - timedelta(days=days_since_last_seen)).isoformat(
+    last_seen = (datetime.utcnow() - timedelta(days=days_since_last_seen)).isoformat(
         sep=" ", timespec="seconds"
     )
     cur = store.conn.cursor()

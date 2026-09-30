@@ -22,7 +22,7 @@ class KnowledgeDecayEngine:
         self.memory = memory
 
     def find_decaying(self, limit: int = 3) -> list[Insight]:
-        now = datetime.now()
+        now = datetime.utcnow()
         cutoff = (now - timedelta(days=self.MIN_STALE_DAYS)).isoformat(
             sep=" ", timespec="seconds"
         )
