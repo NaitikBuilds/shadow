@@ -52,6 +52,8 @@ class InsightPanel(QWidget):
             try:
                 if hasattr(engine, "suggest"):
                     insights.extend(engine.suggest())
+                elif hasattr(engine, "find_notes"):
+                    insights.extend(engine.find_notes())
                 elif hasattr(engine, "find_recurring"):
                     insights.extend(engine.find_recurring())
                 elif hasattr(engine, "find_patterns"):

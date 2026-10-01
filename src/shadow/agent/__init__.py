@@ -8,6 +8,7 @@ from .focus import FocusShield, FocusState
 from .focus_patterns import FocusPatternsEngine
 from .forecasting import ForecastingEngine
 from .insight import Insight
+from .intent_notes import IntentNotesEngine
 from .prompt_builder import PromptBuilder
 from .recovery import RecoveryEngine
 from .recurring import RecurringPatternEngine
@@ -24,6 +25,7 @@ __all__ = [
     "FocusState",
     "ForecastingEngine",
     "Insight",
+    "IntentNotesEngine",
     "KnowledgeDecayEngine",
     "PromptBuilder",
     "QuickCapture",

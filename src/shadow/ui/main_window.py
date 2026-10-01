@@ -21,6 +21,7 @@ from shadow.agent import (
     FocusPatternsEngine,
     FocusShield,
     ForecastingEngine,
+    IntentNotesEngine,
     KnowledgeDecayEngine,
     PromptBuilder,
     QuickCapture,
@@ -85,6 +86,7 @@ class MainWindow(QMainWindow):
         self.ambient_tasks = AmbientTaskList(self.memory, self.session_memory)
         self.focus_patterns = FocusPatternsEngine(self.memory)
         self.recurring_patterns = RecurringPatternEngine(self.memory)
+        self.intent_notes = IntentNotesEngine(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -226,6 +228,7 @@ class MainWindow(QMainWindow):
         panel = InsightPanel(
             engines=[
                 self.clipboard_actions,
+                self.intent_notes,
                 self.focus_patterns,
                 self.recurring_patterns,
                 self.recovery_engine,
