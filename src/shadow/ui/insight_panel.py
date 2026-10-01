@@ -47,11 +47,13 @@ class InsightPanel(QWidget):
             if w is not None:
                 w.deleteLater()
 
-                insights = []
+        insights = []
         for engine in self.engines:
             try:
                 if hasattr(engine, "suggest"):
                     insights.extend(engine.suggest())
+                elif hasattr(engine, "find_recurring"):
+                    insights.extend(engine.find_recurring())
                 elif hasattr(engine, "find_patterns"):
                     insights.extend(engine.find_patterns())
                 elif hasattr(engine, "find_decaying"):

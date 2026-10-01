@@ -25,6 +25,7 @@ from shadow.agent import (
     PromptBuilder,
     QuickCapture,
     RecoveryEngine,
+    RecurringPatternEngine,
     SessionMemory,
     TaintPropagator,
 )
@@ -83,6 +84,7 @@ class MainWindow(QMainWindow):
         self.session_memory = SessionMemory(self.memory)
         self.ambient_tasks = AmbientTaskList(self.memory, self.session_memory)
         self.focus_patterns = FocusPatternsEngine(self.memory)
+        self.recurring_patterns = RecurringPatternEngine(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -225,6 +227,7 @@ class MainWindow(QMainWindow):
             engines=[
                 self.clipboard_actions,
                 self.focus_patterns,
+                self.recurring_patterns,
                 self.recovery_engine,
                 self.forecasting_engine,
                 self.decay_engine,
