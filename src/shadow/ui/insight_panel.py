@@ -47,18 +47,26 @@ class InsightPanel(QWidget):
             if w is not None:
                 w.deleteLater()
 
-        insights = []
+                insights = []
         for engine in self.engines:
             try:
                 if hasattr(engine, "suggest"):
                     insights.extend(engine.suggest())
+                elif hasattr(engine, "find_patterns"):
+                    insights.extend(engine.find_patterns())
                 elif hasattr(engine, "find_decaying"):
                     insights.extend(engine.find_decaying())
                 elif hasattr(engine, "forecast"):
                     insights.extend(engine.forecast())
                 elif hasattr(engine, "find_unfinished"):
                     insights.extend(engine.find_unfinished())
-            except Exception:
+            except Exception as exc:
+                import traceback
+
+                print(
+                    f"[insight_panel] {type(engine).__name__} failed: {exc}", flush=True
+                )
+                traceback.print_exc()
                 continue
 
         # Dedupe by title, keep highest score

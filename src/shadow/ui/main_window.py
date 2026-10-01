@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from shadow.agent import (
     AmbientTaskList,
     ClipboardActionsEngine,
+    FocusPatternsEngine,
     FocusShield,
     ForecastingEngine,
     KnowledgeDecayEngine,
@@ -81,6 +82,7 @@ class MainWindow(QMainWindow):
         self.quick_capture.start()
         self.session_memory = SessionMemory(self.memory)
         self.ambient_tasks = AmbientTaskList(self.memory, self.session_memory)
+        self.focus_patterns = FocusPatternsEngine(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -222,6 +224,7 @@ class MainWindow(QMainWindow):
         panel = InsightPanel(
             engines=[
                 self.clipboard_actions,
+                self.focus_patterns,
                 self.recovery_engine,
                 self.forecasting_engine,
                 self.decay_engine,

@@ -5,6 +5,7 @@ from .capture import QuickCapture
 from .clipboard_actions import ClipboardActionsEngine
 from .decay import KnowledgeDecayEngine
 from .focus import FocusShield, FocusState
+from .focus_patterns import FocusPatternsEngine
 from .forecasting import ForecastingEngine
 from .insight import Insight
 from .prompt_builder import PromptBuilder
@@ -18,6 +19,7 @@ __all__ = [
     "AmbientTaskList",
     "ClipboardActionsEngine",
     "FocusShield",
+    "FocusPatternsEngine",
     "FocusState",
     "ForecastingEngine",
     "Insight",
