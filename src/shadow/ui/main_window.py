@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from shadow.agent import (
     AmbientTaskList,
     ClipboardActionsEngine,
+    DoNotDisturb,
     FocusPatternsEngine,
     FocusShield,
     ForecastingEngine,
@@ -89,6 +90,7 @@ class MainWindow(QMainWindow):
         self.focus_patterns = FocusPatternsEngine(self.memory)
         self.recurring_patterns = RecurringPatternEngine(self.memory)
         self.intent_notes = IntentNotesEngine(self.memory)
+        self.dnd = DoNotDisturb(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -147,11 +149,19 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
         self._setup_tray()
+
         self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self.search_shortcut.setContext(Qt.ApplicationShortcut)
         self.search_shortcut.activated.connect(self.open_search_panel)
+
+        self.dnd_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        self.dnd_shortcut.setContext(Qt.ApplicationShortcut)
+        self.dnd_shortcut.activated.connect(self._toggle_dnd)
+
         self._build_menu()  # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
+
+        self._sync_dnd_ui()
 
         self._start_observer()
 
@@ -159,10 +169,16 @@ class MainWindow(QMainWindow):
         self.tray = TrayNotifier(self)
         self.tray.show_window_requested.connect(self._restore_window)
         self.tray.quit_requested.connect(self._request_quit)
+        self.tray.dnd_toggled.connect(self._on_dnd_toggle)
+        self.tray.set_dnd(self.dnd.enabled)
         self.tray.show()
 
         if self.reporter is not None:
             self.reporter.subscribe(Severity.TRAY, self.tray.notify)
+
+    def _toggle_dnd(self):
+        new_state = not self.dnd.enabled
+        self._on_dnd_toggle(new_state)
 
     def _restore_window(self):
         self.showNormal()
@@ -175,6 +191,26 @@ class MainWindow(QMainWindow):
         self._full_shutdown = True
         self.close()
         QApplication.quit()
+
+    def _on_dnd_toggle(self, enabled: bool):
+        try:
+            self.dnd.set(enabled)
+        except Exception:
+            pass
+        try:
+            self.tray.set_dnd(enabled)
+        except Exception:
+            pass
+        if hasattr(self, "_dnd_menu_action"):
+            self._dnd_menu_action.setChecked(enabled)
+
+    def _sync_dnd_ui(self):
+        try:
+            self.tray.set_dnd(self.dnd.enabled)
+            if hasattr(self, "_dnd_menu_action"):
+                self._dnd_menu_action.setChecked(self.dnd.enabled)
+        except Exception:
+            pass
 
     # ---------- menu (NEW in Commit 3) ----------
 
@@ -196,6 +232,12 @@ class MainWindow(QMainWindow):
 
         diagnostics_action = settings_menu.addAction("Diagnostics…")
         diagnostics_action.triggered.connect(self.open_diagnostics_panel)
+
+        dnd_action = settings_menu.addAction("Do Not Disturb")
+        dnd_action.setCheckable(True)
+        dnd_action.setChecked(self.dnd.enabled)
+        dnd_action.triggered.connect(self._on_dnd_toggle)
+        self._dnd_menu_action = dnd_action
 
         search_menu = menu.addMenu("Search")
         search_action = search_menu.addAction("Search Observations…")

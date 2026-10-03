@@ -27,6 +27,28 @@ def make_shadow_icon(size: int = 64) -> QIcon:
     return QIcon(pixmap)
 
 
+def make_shadow_icon_muted(size: int = 64) -> QIcon:
+    """Gray-tinted icon shown when DND is enabled."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+
+    painter.setBrush(QBrush(QColor("#1a1a1a")))
+    margin = size // 10
+    painter.drawEllipse(margin, margin, size - 2 * margin, size - 2 * margin)
+
+    painter.setBrush(QBrush(QColor("#888888")))
+    inner = size // 3
+    offset = (size - inner) // 2
+    painter.drawEllipse(offset, offset, inner, inner)
+
+    painter.end()
+    return QIcon(pixmap)
+
+
 class TrayNotifier(QObject):
     """Owns the QSystemTrayIcon and routes notifications.
 
@@ -37,14 +59,33 @@ class TrayNotifier(QObject):
 
     show_window_requested = Signal()
     quit_requested = Signal()
+    dnd_toggled = Signal(bool)
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
         self.tray = QSystemTrayIcon(make_shadow_icon(), parent)
         self.tray.setToolTip("SHADOW — running")
         self._minimize_hint_shown = False
+        self._dnd_enabled = False
+        self._dnd_action = None
         self._build_menu()
         self.tray.activated.connect(self._on_activated)
+
+    def set_dnd(self, enabled: bool) -> None:
+        """Update the tray icon and menu checkmark for DND state."""
+        self._dnd_enabled = bool(enabled)
+        if enabled:
+            self.tray.setIcon(make_shadow_icon_muted())
+            self.tray.setToolTip("SHADOW — running (DND)")
+        else:
+            self.tray.setIcon(make_shadow_icon())
+            self.tray.setToolTip("SHADOW — running")
+        if self._dnd_action is not None:
+            self._dnd_action.setChecked(enabled)
+
+    @property
+    def dnd_enabled(self) -> bool:
+        return self._dnd_enabled
 
     # ---------- menu ----------
 
@@ -53,9 +94,17 @@ class TrayNotifier(QObject):
         show_action = menu.addAction("Show SHADOW")
         show_action.triggered.connect(self.show_window_requested.emit)
         menu.addSeparator()
+        self._dnd_action = menu.addAction("Do Not Disturb")
+        self._dnd_action.setCheckable(True)
+        self._dnd_action.setShortcut("Ctrl+Shift+M")
+        self._dnd_action.triggered.connect(self._on_dnd_clicked)
+        menu.addSeparator()
         quit_action = menu.addAction("Quit SHADOW")
         quit_action.triggered.connect(self.quit_requested.emit)
         self.tray.setContextMenu(menu)
+
+    def _on_dnd_clicked(self, checked: bool) -> None:
+        self.dnd_toggled.emit(checked)
 
     # ---------- activation ----------
 
@@ -74,7 +123,9 @@ class TrayNotifier(QObject):
     # ---------- notifications ----------
 
     def notify(self, error) -> None:
-        """Show a system tray message for a ShadowError."""
+        """Show a system tray message for a ShadowError (unless DND is on)."""
+        if self._dnd_enabled:
+            return
         title = f"SHADOW — {error.feature}"
         body = error.reason
         if error.user_action:
