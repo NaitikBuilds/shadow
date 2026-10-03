@@ -11,6 +11,7 @@ from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
 from .uia import UIANode, UIAutomationSource
+from .uia_text import TextBlock, UIATextExtractor
 from .window_classifier import WindowCategory, WindowClassifier, WindowProfile
 
 __all__ = [
@@ -30,4 +31,6 @@ __all__ = [
     "WindowCategory",
     "WindowClassifier",
     "WindowProfile",
+    "TextBlock",
+    "UIATextExtractor",
 ]
