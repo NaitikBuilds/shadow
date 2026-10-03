@@ -55,6 +55,33 @@ backend means adding a new file here and a selection rule in `main.py`.
 
 All storage logic lives here. Nothing else opens the database directly.
 
+### `src/shadow/agent/` — Proactive engines
+
+Every engine produces `Insight` objects that the Insight panel renders.
+
+| Engine | Purpose |
+|---|---|
+| `recovery` | Find abandoned work sessions |
+| `forecasting` | Predict near-term needs (30–120 min) |
+| `decay` | Flag entities fading from memory |
+| `focus` | Detect deep-focus state; filter insights |
+| `focus_patterns` | Learn when/where focus is highest |
+| `recurring` | Detect weekly activity rhythms |
+| `intent_notes` | Extract "note to self" phrases |
+| `clipboard_actions` | Classify clipboard content; suggest actions |
+| `sessions` | Group observations into coherent work sessions |
+| `ambient` | Passive "working on" list |
+| `style` | Generate text in the user's voice |
+| `dnd` | Global Do Not Disturb toggle |
+| `feedback` | Record insight feedback + useful rate |
+| `capture` | Global Quick Capture hotkey |
+
+Supporting primitives:
+
+- `insight.py` — `Insight` dataclass
+- `prompt_builder.py` — wraps observations in untrusted tags
+- `taint.py` — tracks parameter trust levels for future actions
+
 ### `src/shadow/perception/` — Observation sources
 
 Each source implements `PerceptionSource`:
@@ -187,6 +214,8 @@ Nine tables + two virtual tables. All migrations live in
 | `activity_log` | All user-visible events |
 | `intentions` | (Reserved for Phase 3) |
 | `schema_meta` | Migration version + model hashes + prune timestamp |
+| `insight_feedback` | 👍/👎 verdicts on insights |
+| `ambient_task_state` | Dismiss/promote decisions for ambient list |
 
 **WAL mode** is enabled on every connection. `foreign_keys=ON` also set
 per-connection.
@@ -316,6 +345,10 @@ shadow/
 - **Every error is classified.** No untyped exceptions reach the UI.
 - **Imports flow downward only.** No circular dependencies between layers.
 - **Tracebacks never touch the DB.** They go to `logs/errors_*.log`.
+- **Every insight flows through one dataclass.** Engines don't touch UI.
+- **Every LLM call with observations uses PromptBuilder.**
+- **Every observation is redacted before storage and embedding.**
+- **All timestamps are UTC.** No local-time comparisons anywhere.
 
 ---
 

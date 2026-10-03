@@ -12,7 +12,7 @@ SHADOW is a personal research project investigating how a desktop application ca
 
 The project is developed in the open for learning and portfolio purposes, but is not a public product. There is no installer, no release, and no support.
 
-**What this repo contains today:** an early-stage experimental implementation of local observation and retrieval on Windows. It runs entirely offline.
+**What this repo contains today:** a local-first observation and retrieval system with proactive insight engines, all running offline on Windows.
 
 **What this repo is not:** a finished tool, a product announcement, or a description of the full research direction. The design documentation is maintained separately and is not included here.
 
@@ -26,7 +26,10 @@ The project is developed in the open for learning and portfolio purposes, but is
 | Core local observation + retrieval | ✅ Complete |
 | Extended perception | ✅ Complete |
 | Infrastructure hardening | ✅ Complete |
-| Further features | 🔒 Private roadmap |
+| Proactive intelligence | ✅ Complete |
+| Structured screen (UIA) | 🔒 Next |
+| Vision understanding | 🔒 Planned |
+| Agentic actions | 🔒 Planned |
 
 Development is part-time and ongoing. No release schedule.
 
@@ -34,18 +37,48 @@ Development is part-time and ongoing. No release schedule.
 
 ## What works right now
 
-- Runs fully offline on Windows (no network calls)
-- Local observation of basic desktop context (opt-in, per-channel consent)
+**Core**
+- Runs fully offline on Windows (no network calls from the main process)
+- Local observation of desktop context (opt-in, per-channel consent)
 - Local vector memory with semantic and temporal retrieval
 - Local knowledge graph built from observations
-- Consent controls, activity log, and one-click local data wipe
 - Streaming chat interface backed by a small local language model
-- Versioned database migrations with automatic backups
-- System tray integration with minimize-to-tray
-- Retention policies and crash recovery
-- Structured error taxonomy with categorized notifications
 
-Everything runs on-device. Nothing leaves the machine.
+**Perception**
+- Active window, screen OCR, typing dynamics
+- Document / PDF ingestion
+- Calendar ingestion (`.ics` + WinRT when packaged)
+- Clipboard awareness with sensitive-content filtering
+- Adaptive observation budget (dynamic tick rate)
+
+**Proactive engines**
+- Unfinished-work recovery
+- Intention forecasting
+- Knowledge decay detection
+- Contextual focus shield
+- Style mirror
+- Clipboard actions
+- Session memory
+- Ambient task list
+- Focus patterns
+- Recurring pattern detection
+- Intent-aware notes
+
+**Control & interface**
+- Consent panel, observation indicator
+- Privacy dashboard + activity log
+- Search panel (Ctrl+F)
+- Diagnostics panel
+- Do Not Disturb (Ctrl+Shift+M)
+- Quick Capture (Ctrl+Shift+S)
+- System tray with minimize-to-tray
+- Insight feedback (👍/👎) with useful intervention rate
+
+**Security**
+- Untrusted-content tagging (PromptBuilder)
+- Taint propagation for future action parameters
+- Secret redaction before embedding
+- Network isolation enforced by CI
 
 ---
 
@@ -91,6 +124,7 @@ On first launch, all observation channels are **off**. Enable only what you want
 - **Opt-in.** Every sensing channel requires explicit consent.
 - **Transparent.** All observations are logged and viewable.
 - **Erasable.** One-click full wipe of local data.
+- **Redacted.** API keys, tokens, and card numbers stripped before storage.
 - **No telemetry.** No analytics, no crash reporting, no usage tracking.
 - **No training on your data.** Ever.
 
@@ -103,9 +137,10 @@ On first launch, all observation channels are **off**. Enable only what you want
 - llama.cpp via `llama-cpp-python` (local LLM runtime)
 - ONNX Runtime + quantized MiniLM (local embeddings)
 - SQLite + `sqlite-vec` (local vector storage)
-- Windows OCR engine (for text extraction from screen)
+- Windows OCR engine (screen text extraction)
 - `pywin32`, `psutil` (Windows integration)
 - `pypdf`, `python-docx`, `icalendar` (document and calendar parsing)
+- `pynput` (typing dynamics, global hotkeys)
 
 Everything is open-source and runs locally.
 
@@ -116,6 +151,7 @@ Everything is open-source and runs locally.
 ```
 shadow/
 ├── src/shadow/
+│   ├── agent/            # Proactive engines + security primitives
 │   ├── hal/              # Hardware abstraction (CPU today)
 │   ├── memory/           # SQLite + vectors + knowledge graph
 │   │   └── migrations/   # Versioned schema migrations
@@ -145,9 +181,9 @@ are.
 pytest
 ```
 
-The suite covers local memory, consent handling, perception sources, entity
-extraction, migrations, model management, error routing, retention, and crash
-recovery.
+The suite covers memory, consent, perception, entity extraction, migrations,
+model management, error routing, retention, crash recovery, every proactive
+engine, and security primitives.
 
 Pytest markers:
 
@@ -175,15 +211,16 @@ python scripts/checks/check_graph.py         # knowledge graph snapshot
 python scripts/checks/check_documents.py     # document observation status
 python scripts/checks/check_calendar.py      # calendar observation status
 python scripts/checks/check_typing.py        # typing dynamics observations
+python scripts/checks/check_clipboard.py     # clipboard observation status
 python scripts/checks/find_debug_prints.py   # scan for leftover debug code
 
 # Tooling
-python scripts/manage_models.py list         # model status
+python scripts/data/manage_models.py list      # model status
 python scripts/data/seed_demo_observations.py  # populate test data
-python scripts/data/make_test_calendar.py    # generate a test .ics file
-python scripts/check_install.py              # verify editable install
-python scripts/check_network_isolation.py    # verify no network calls in core
-python scripts/run_benchmarks.py             # latency benchmarks
+python scripts/data/make_test_calendar.py      # generate a test .ics file
+python scripts/check_install.py                # verify editable install
+python scripts/check_network_isolation.py      # verify no network calls in core
+python scripts/run_benchmarks.py               # latency benchmarks
 ```
 
 ---

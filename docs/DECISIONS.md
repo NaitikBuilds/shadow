@@ -223,3 +223,25 @@ When making a non-trivial choice:
 
 If a decision is reversed, **don't delete the entry** — add a new one that
 references the old one. The history matters.
+
+**2026-10 — Proactive engines use UTC, not local time.**
+Reason: Observations were already UTC (SQLite). Engines compared against
+`datetime.now()` (local) causing every window filter to be off by the
+local UTC offset. Fixed in Phase 3 Commit "fix(agent): use UTC consistently."
+Revisit: Never.
+
+**2026-10 — Redaction is applied before storage, not just before display.**
+Reason: If only display were redacted, secrets would live in the DB and in
+the vector embeddings. Redacting once, at write time, keeps both clean.
+Revisit: Never.
+
+**2026-10 — Person extraction requires exactly two capitalized tokens.**
+Reason: Three-token phrases are usually product names (Visual Studio Code,
+Visual Studio Code Insiders). Losing real three-word names is preferable to
+false-positive noise. Users can add missed names to _PERSON_STOPWORDS.
+Revisit: If real usage shows we're missing too many names.
+
+**2026-10 — i18n deferred to Phase 8.**
+Reason: Externalizing strings without actual translations is churn.
+Phase 3 focuses on features. Localization lands when the UI is frozen.
+Revisit: Phase 8.
