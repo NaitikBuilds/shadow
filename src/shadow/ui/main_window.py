@@ -19,6 +19,7 @@ from shadow.agent import (
     AmbientTaskList,
     ClipboardActionsEngine,
     DoNotDisturb,
+    FeedbackStore,
     FocusPatternsEngine,
     FocusShield,
     ForecastingEngine,
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         self.recurring_patterns = RecurringPatternEngine(self.memory)
         self.intent_notes = IntentNotesEngine(self.memory)
         self.dnd = DoNotDisturb(self.memory)
+        self.feedback = FeedbackStore(self.memory)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -290,6 +292,7 @@ class MainWindow(QMainWindow):
                 self.decay_engine,
             ],
             focus_shield=self.focus_shield,
+            feedback=self.feedback,
         )
         layout.addWidget(panel)
         close_btn = QPushButton("Close")
@@ -316,7 +319,11 @@ class MainWindow(QMainWindow):
 
         observer = getattr(self, "observer", None)
         panel = DiagnosticsPanel(
-            self.backend, self.memory, self.config, observer=observer
+            self.backend,
+            self.memory,
+            self.config,
+            observer=observer,
+            feedback=self.feedback,
         )
         layout.addWidget(panel)
 

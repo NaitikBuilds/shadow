@@ -5,6 +5,7 @@ from .capture import QuickCapture
 from .clipboard_actions import ClipboardActionsEngine
 from .decay import KnowledgeDecayEngine
 from .dnd import DoNotDisturb
+from .feedback import FeedbackStats, FeedbackStore
 from .focus import FocusShield, FocusState
 from .focus_patterns import FocusPatternsEngine
 from .forecasting import ForecastingEngine
@@ -22,6 +23,8 @@ __all__ = [
     "AmbientTaskList",
     "ClipboardActionsEngine",
     "DoNotDisturb",
+    "FeedbackStats",
+    "FeedbackStore",
     "FocusPatternsEngine",
     "FocusShield",
     "FocusState",

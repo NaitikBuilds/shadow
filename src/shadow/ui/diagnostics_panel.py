@@ -15,12 +15,13 @@ from PySide6.QtWidgets import (
 class DiagnosticsPanel(QWidget):
     """Read-only view of SHADOW's current state."""
 
-    def __init__(self, backend, memory, config, observer=None):
+    def __init__(self, backend, memory, config, observer=None, feedback=None):
         super().__init__()
         self.backend = backend
         self.memory = memory
         self.config = config
         self.observer = observer
+        self.feedback = feedback
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("<h2>Diagnostics</h2>"))
@@ -70,12 +71,34 @@ class DiagnosticsPanel(QWidget):
             self._backend_section(),
             self._models_section(),
             self._observer_section(),
+            self._feedback_section(),
             self._database_section(),
             self._retention_section(),
             self._errors_section(),
             self._network_section(),
         ]
         return "\n\n".join(s for s in sections if s)
+
+    def _feedback_section(self) -> str:
+        lines = ["=== Insight Feedback (last 30 days) ==="]
+        if self.feedback is None:
+            lines.append("  (not attached)")
+            return "\n".join(lines)
+        try:
+            stats = self.feedback.stats(30)
+            lines.append(
+                f"  useful intervention rate : "
+                f"{int(stats.rate * 100)}% "
+                f"({stats.useful}/{stats.total})"
+            )
+            by_kind = self.feedback.stats_by_kind(30)
+            for kind, s in sorted(by_kind.items()):
+                lines.append(
+                    f"  {kind:24}: {int(s.rate * 100):>3}%  " f"({s.useful}/{s.total})"
+                )
+        except Exception as exc:
+            lines.append(f"  error: {exc}")
+        return "\n".join(lines)
 
     # ---------- sections ----------
 

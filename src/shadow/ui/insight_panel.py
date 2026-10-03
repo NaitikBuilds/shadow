@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -9,16 +10,13 @@ from PySide6.QtWidgets import (
 
 
 class InsightPanel(QWidget):
-    """Displays a list of Insight objects as cards.
+    """Displays a list of Insight objects as cards with feedback buttons."""
 
-    Consulted through FocusShield so deep-work sessions only surface
-    high-confidence insights.
-    """
-
-    def __init__(self, engines=None, focus_shield=None):
+    def __init__(self, engines=None, focus_shield=None, feedback=None):
         super().__init__()
         self.engines = engines or []
         self.focus_shield = focus_shield
+        self.feedback = feedback
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("<h2>Insights</h2>"))
@@ -39,6 +37,8 @@ class InsightPanel(QWidget):
         layout.addWidget(self.scroll)
 
         self.refresh()
+
+    # ---------- rendering ----------
 
     def refresh(self):
         while self.inner_layout.count():
@@ -68,12 +68,12 @@ class InsightPanel(QWidget):
                 import traceback
 
                 print(
-                    f"[insight_panel] {type(engine).__name__} failed: {exc}", flush=True
+                    f"[insight_panel] {type(engine).__name__} failed: {exc}",
+                    flush=True,
                 )
                 traceback.print_exc()
                 continue
 
-        # Dedupe by title, keep highest score
         best = {}
         for i in insights:
             existing = best.get(i.title)
@@ -105,8 +105,7 @@ class InsightPanel(QWidget):
             self.inner_layout.addWidget(self._make_card(insight))
         self.inner_layout.addStretch()
 
-    @staticmethod
-    def _make_card(insight) -> QWidget:
+    def _make_card(self, insight) -> QWidget:
         card = QFrame()
         card.setFrameShape(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(card)
@@ -129,4 +128,47 @@ class InsightPanel(QWidget):
             action.setStyleSheet("color: #4a90e2;")
             layout.addWidget(action)
 
+        # Feedback row
+        fb_row = QHBoxLayout()
+        fb_row.addStretch()
+
+        prior = None
+        if self.feedback is not None:
+            try:
+                prior = self.feedback.verdict_for(insight.kind, insight.title)
+            except Exception:
+                prior = None
+
+        status = QLabel()
+        if prior:
+            status.setText(
+                "✓ marked useful" if prior == "useful" else "✗ marked not useful"
+            )
+            status.setStyleSheet("color: #888; font-size: 10px;")
+            fb_row.addWidget(status)
+
+        up = QPushButton("👍")
+        up.setToolTip("Useful")
+        up.setMaximumWidth(40)
+        up.clicked.connect(lambda _, i=insight: self._feedback(i, "useful"))
+        fb_row.addWidget(up)
+
+        down = QPushButton("👎")
+        down.setToolTip("Not useful")
+        down.setMaximumWidth(40)
+        down.clicked.connect(lambda _, i=insight: self._feedback(i, "not_useful"))
+        fb_row.addWidget(down)
+
+        layout.addLayout(fb_row)
         return card
+
+    # ---------- feedback ----------
+
+    def _feedback(self, insight, verdict: str):
+        if self.feedback is None:
+            return
+        try:
+            self.feedback.record(insight.kind, insight.title, verdict)
+        except Exception:
+            pass
+        self.refresh()
