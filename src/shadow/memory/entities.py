@@ -97,11 +97,107 @@ _FILE_EXTENSIONS = (
     "ini",
 )
 
+# Person-name stopwords: words that look like names but aren't.
+_PERSON_STOPWORDS = {
+    "GitHub",
+    "GitLab",
+    "Chrome",
+    "Firefox",
+    "Edge",
+    "Safari",
+    "Slack",
+    "Discord",
+    "Notion",
+    "Obsidian",
+    "Linear",
+    "Figma",
+    "Python",
+    "JavaScript",
+    "TypeScript",
+    "Rust",
+    "Go",
+    "Java",
+    "Windows",
+    "Linux",
+    "Mac",
+    "Ubuntu",
+    "Debian",
+    "Android",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "The",
+    "And",
+    "Or",
+    "But",
+    "If",
+    "Then",
+    "Also",
+    "However",
+    "Today",
+    "Tomorrow",
+    "Yesterday",
+    "Phase",
+    "Project",
+    "Task",
+    "Team",
+    "Group",
+    "Meeting",
+    "SHADOW",
+}
+
+# Honorifics that mark the following token as a person.
+_TITLES = (
+    "Mr",
+    "Mrs",
+    "Ms",
+    "Miss",
+    "Dr",
+    "Prof",
+    "Sir",
+    "Madam",
+)
+
+_TITLE_PATTERN = re.compile(
+    r"\b(?:" + "|".join(_TITLES) + r")\.?\s+([A-Z][a-zA-Z\-']+)"
+)
+
+# Email-header pattern: From: alice@..., To: bob@...
+_EMAIL_HEADER_PATTERN = re.compile(
+    r"^(?:From|To|Cc|Bcc):\s*([A-Za-z][A-Za-z0-9._\-]*)@",
+    re.MULTILINE,
+)
+
+# @handle pattern (common in chat/social contexts)
+_HANDLE_PATTERN = re.compile(r"(?<!\w)@([a-zA-Z][a-zA-Z0-9_]{2,30})\b")
+
 
 class EntityExtractor:
     """Rule-based entity extraction from observation text.
 
     Fast, deterministic, offline. No LLM involved.
+
+    Extracts five entity types:
+      - project : matches known_projects config (case-insensitive)
+      - file    : filename with a known extension
+      - person  : titled names, email-header names, @handles, full names
+      - topic   : capitalized phrases (fallback)
     """
 
     _CAP_PHRASE = re.compile(r"\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+){0,2})\b")
@@ -125,19 +221,68 @@ class EntityExtractor:
             if key in lower:
                 found[("project", original)] = {"type": "project", "name": original}
 
-        # 2. Capitalized phrases → topics
-        for match in self._CAP_PHRASE.finditer(text):
-            cleaned = self._clean_topic(match.group(1).strip())
-            if cleaned is None:
-                continue
-            found.setdefault(("topic", cleaned), {"type": "topic", "name": cleaned})
-
-        # 3. Filenames → files
+        # 2. Filenames
         for match in self._FILE_NAME.finditer(text):
             name = match.group(1)
             found[("file", name)] = {"type": "file", "name": name}
 
+        # 3. Person: titled names (highest confidence)
+        for match in _TITLE_PATTERN.finditer(text):
+            name = match.group(1).strip()
+            if self._is_valid_person(name):
+                found[("person", name)] = {"type": "person", "name": name}
+
+        # 4. Person: email-header names
+        for match in _EMAIL_HEADER_PATTERN.finditer(text):
+            name = match.group(1).strip().capitalize()
+            if self._is_valid_person(name):
+                found[("person", name)] = {"type": "person", "name": name}
+
+        # 5. Person: @handles
+        for match in _HANDLE_PATTERN.finditer(text):
+            name = match.group(1).strip()
+            if self._is_valid_person(name):
+                found[("person", name)] = {"type": "person", "name": name}
+
+        # 6. Person: two-token capitalized phrases (first + last name).
+        # Require EXACTLY two tokens so three-word product names
+        # ("Visual Studio Code") don't get misclassified as people.
+        for match in self._CAP_PHRASE.finditer(text):
+            phrase = match.group(1).strip()
+            tokens = phrase.split()
+            if len(tokens) != 2:
+                continue
+            if not all(self._is_valid_person(t) for t in tokens):
+                continue
+            if ("project", phrase) in found or ("file", phrase) in found:
+                continue
+            found[("person", phrase)] = {"type": "person", "name": phrase}
+
+        # 7. Topics — anything else capitalized (existing behavior)
+        for match in self._CAP_PHRASE.finditer(text):
+            cleaned = self._clean_topic(match.group(1).strip())
+            if cleaned is None:
+                continue
+            # Skip if already captured as person/project/file
+            if any((t, cleaned) in found for t in ("project", "file", "person")):
+                continue
+            found.setdefault(("topic", cleaned), {"type": "topic", "name": cleaned})
+
         return list(found.values())
+
+    # ---------- validation ----------
+
+    @staticmethod
+    def _is_valid_person(name: str) -> bool:
+        if not name:
+            return False
+        stripped = name.strip()
+        if len(stripped) < 2:
+            return False
+        first = stripped.split()[0]
+        if first in _PERSON_STOPWORDS:
+            return False
+        return first[0].isalpha()
 
     @staticmethod
     def _clean_topic(name: str) -> str | None:
@@ -148,7 +293,6 @@ class EntityExtractor:
         cleaned = " ".join(tokens)
         if len(cleaned) < 3:
             return None
-        # All-caps acronyms (SHADOW, SQL, ONNX) are valid
         if cleaned.isupper() and len(cleaned) >= 2:
             return cleaned
         first = tokens[0]
