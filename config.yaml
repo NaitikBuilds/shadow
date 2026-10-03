@@ -110,6 +110,12 @@ capture:
   hotkey: "<ctrl>+<shift>+s"
   output_dir: "~/SHADOW_workspace/captures"  
 
+redaction:
+  enabled: true
+  redact_emails: false
+  placeholder: "[REDACTED]"
+
+
 modes:
   default: "balanced"
   lite:

@@ -5,8 +5,9 @@ import time
 
 from PySide6.QtCore import QThread, Signal
 
-from shadow.config import perception_config, source_enabled
+from shadow.config import perception_config, redaction_config, source_enabled
 from shadow.memory import EntityExtractor, GraphBuilder
+from shadow.memory.redaction import Redactor
 from shadow.perception.active_window import ActiveWindowSource
 from shadow.perception.budget import BudgetController
 from shadow.perception.calendar import CalendarSource
@@ -38,6 +39,12 @@ class ObservationWorker(QThread):
         self.backend = backend
         self.config = config
         self.pcfg = perception_config(config)
+        rcfg = redaction_config(config)
+        self.redactor = Redactor(
+            enabled=rcfg["enabled"],
+            redact_emails=rcfg["redact_emails"],
+            placeholder=rcfg["placeholder"],
+        )
         self.budget = BudgetController(memory, config)
 
         self.sources = []
@@ -164,6 +171,16 @@ class ObservationWorker(QThread):
             content = self._content_from(source.name, payload)
             if not content:
                 continue
+
+            # Redact secrets before storage or embedding.
+            try:
+                content, matched = self.redactor.redact(content)
+                if matched:
+                    self.error.emit(
+                        f"redaction in {source.name}: {len(matched)} secret(s) removed"
+                    )
+            except Exception:
+                matched = []
 
             if self._is_duplicate(source.name, content):
                 continue

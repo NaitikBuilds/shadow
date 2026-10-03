@@ -114,3 +114,13 @@ def capture_config(config: dict) -> dict:
         "output_dir": "~/SHADOW_workspace/captures",
     }
     return {**defaults, **(config.get("capture") or {})}
+
+
+def redaction_config(config: dict) -> dict:
+    """Return the redaction block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "redact_emails": False,
+        "placeholder": "[REDACTED]",
+    }
+    return {**defaults, **(config.get("redaction") or {})}
