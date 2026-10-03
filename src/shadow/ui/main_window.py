@@ -333,7 +333,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def open_search_panel(self):
-        print("[main_window] open_search_panel called", flush=True)
+        dlg = QDialog(self)
         dlg = QDialog(self)
         dlg.setWindowTitle("SHADOW — Search")
         dlg.resize(720, 640)
