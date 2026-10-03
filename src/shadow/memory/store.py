@@ -241,6 +241,68 @@ class MemoryStore:
             )
             self.conn.commit()
 
+    def search_observations(
+        self,
+        query: str = "",
+        source: str | None = None,
+        entity_name: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int = 100,
+    ) -> list[tuple]:
+        """Keyword search across observations with optional filters.
+
+        Returns [(id, timestamp, source, content)] ordered newest first.
+        """
+        clauses: list[str] = []
+        params: list = []
+
+        if query:
+            clauses.append("o.content LIKE ?")
+            params.append(f"%{query}%")
+
+        if source:
+            clauses.append("o.source = ?")
+            params.append(source)
+
+        if start:
+            clauses.append("o.timestamp >= ?")
+            params.append(start)
+
+        if end:
+            clauses.append("o.timestamp <= ?")
+            params.append(end)
+
+        if entity_name:
+            clauses.append(
+                "o.id IN ("
+                "  SELECT oe.observation_id FROM observation_entities oe"
+                "  JOIN entities e ON e.id = oe.entity_id"
+                "  WHERE e.name LIKE ?"
+                ")"
+            )
+            params.append(f"%{entity_name}%")
+
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        sql = (
+            "SELECT o.id, o.timestamp, o.source, o.content "
+            "FROM observations o" + where + " ORDER BY o.timestamp DESC LIMIT ?"
+        )
+        params.append(limit)
+
+        cur = self.conn.cursor()
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+    def distinct_sources(self) -> list[str]:
+        """Return all distinct observation sources."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT source FROM observations "
+            "WHERE source IS NOT NULL ORDER BY source"
+        )
+        return [row[0] for row in cur.fetchall()]
+
     def close(self) -> None:
         """Close the SQLite connection (required on Windows before deleting DB)."""
         try:

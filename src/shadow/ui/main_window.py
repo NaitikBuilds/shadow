@@ -1,7 +1,7 @@
 import sys
 
-from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QCloseEvent, QTextCursor
+from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,  # NEW in Commit 3
@@ -39,6 +39,7 @@ from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
 from shadow.ui.privacy_dashboard import PrivacyDashboard
+from shadow.ui.search_panel import SearchPanel
 
 
 class InferenceWorker(QThread):
@@ -145,6 +146,9 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
         self._setup_tray()
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.setContext(Qt.ApplicationShortcut)
+        self.search_shortcut.activated.connect(self.open_search_panel)
         self._build_menu()  # NEW in Commit 3
         self.memory.log_activity("app_start", "SHADOW started")
 
@@ -188,6 +192,10 @@ class MainWindow(QMainWindow):
 
         ambient_action = settings_menu.addAction("Working On…")
         ambient_action.triggered.connect(self.open_ambient_panel)
+
+        search_menu = menu.addMenu("Search")
+        search_action = search_menu.addAction("Search Observations…")
+        search_action.triggered.connect(self.open_search_panel)
 
     def open_consent_panel(self):
         dlg = QDialog(self)
@@ -249,6 +257,18 @@ class MainWindow(QMainWindow):
         dlg.resize(560, 620)
         layout = QVBoxLayout(dlg)
         layout.addWidget(AmbientPanel(self.ambient_tasks))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_search_panel(self):
+        print("[main_window] open_search_panel called", flush=True)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Search")
+        dlg.resize(720, 640)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(SearchPanel(self.memory))
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
