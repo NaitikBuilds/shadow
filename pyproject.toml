@@ -30,6 +30,7 @@ dependencies = [
     "python-docx>=1.1",
     "icalendar>=5.0",
     "winrt-Windows.ApplicationModel.Appointments>=2.0",
+    "uiautomation>=2.0",
 ]
 
 [project.optional-dependencies]

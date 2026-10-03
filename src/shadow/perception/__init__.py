@@ -10,6 +10,7 @@ from .documents import DocumentSource
 from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
+from .uia import UIANode, UIAutomationSource
 
 __all__ = [
     "ActiveWindow",
@@ -22,5 +23,7 @@ __all__ = [
     "PerceptionSource",
     "ScreenOCRSource",
     "TypingDynamicsSource",
+    "UIAutomationSource",
+    "UIANode",
     "WindowsCalendarSource",
 ]

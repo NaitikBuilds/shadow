@@ -30,6 +30,12 @@ perception:
       - Phase 2
       - Phase 3
 
+  uia:
+    enabled: true
+    max_depth: 8
+    max_elements: 500
+    min_useful_nodes: 3    
+
   # Which perception sources are active
   sources:
     active_window: true

@@ -124,3 +124,15 @@ def redaction_config(config: dict) -> dict:
         "placeholder": "[REDACTED]",
     }
     return {**defaults, **(config.get("redaction") or {})}
+
+
+def uia_config(config: dict) -> dict:
+    """Return the perception.uia block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "max_depth": 8,
+        "max_elements": 500,
+        "min_useful_nodes": 3,
+    }
+    user = (config.get("perception") or {}).get("uia") or {}
+    return {**defaults, **user}
