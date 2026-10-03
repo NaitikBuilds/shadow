@@ -11,6 +11,7 @@ from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
 from .uia import UIANode, UIAutomationSource
+from .window_classifier import WindowCategory, WindowClassifier, WindowProfile
 
 __all__ = [
     "ActiveWindow",
@@ -26,4 +27,7 @@ __all__ = [
     "UIAutomationSource",
     "UIANode",
     "WindowsCalendarSource",
+    "WindowCategory",
+    "WindowClassifier",
+    "WindowProfile",
 ]

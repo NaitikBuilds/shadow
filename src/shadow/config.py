@@ -136,3 +136,10 @@ def uia_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("uia") or {}
     return {**defaults, **user}
+
+
+def window_classifier_config(config: dict) -> dict:
+    """Return the window_classifier block with safe defaults."""
+    defaults = {"custom_map": {}}
+    user = (config.get("perception") or {}).get("window_classifier") or {}
+    return {**defaults, **user}

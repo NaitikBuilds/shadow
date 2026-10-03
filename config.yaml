@@ -36,6 +36,13 @@ perception:
     max_elements: 500
     min_useful_nodes: 3    
 
+  window_classifier:
+    custom_map: {}
+    # Example:
+    # custom_map:
+    #   my_app: editor
+    #   another_tool: notes  
+
   # Which perception sources are active
   sources:
     active_window: true
