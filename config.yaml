@@ -43,6 +43,9 @@ perception:
     #   my_app: editor
     #   another_tool: notes  
 
+  interactive:
+    max_elements: 100  
+
   # Which perception sources are active
   sources:
     active_window: true

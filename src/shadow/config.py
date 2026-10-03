@@ -143,3 +143,10 @@ def window_classifier_config(config: dict) -> dict:
     defaults = {"custom_map": {}}
     user = (config.get("perception") or {}).get("window_classifier") or {}
     return {**defaults, **user}
+
+
+def interactive_config(config: dict) -> dict:
+    """Return the perception.interactive block with safe defaults."""
+    defaults = {"max_elements": 100}
+    user = (config.get("perception") or {}).get("interactive") or {}
+    return {**defaults, **user}

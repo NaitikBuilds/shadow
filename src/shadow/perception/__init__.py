@@ -7,6 +7,11 @@ from .calendar import CalendarSource
 from .calendar_winrt import WindowsCalendarSource
 from .clipboard import ClipboardSource
 from .documents import DocumentSource
+from .interactive import (
+    ElementRole,
+    InteractiveElement,
+    InteractiveExtractor,
+)
 from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
 from .typing import TypingDynamicsSource
@@ -33,4 +38,7 @@ __all__ = [
     "WindowProfile",
     "TextBlock",
     "UIATextExtractor",
+    "ElementRole",
+    "InteractiveElement",
+    "InteractiveExtractor",
 ]
