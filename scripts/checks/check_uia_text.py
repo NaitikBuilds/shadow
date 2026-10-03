@@ -3,7 +3,7 @@
 import sys
 import time
 
-from shadow.perception import UIAutomationSource, UIATextExtractor
+from shadow.perception import UIATextExtractor, UIAutomationSource
 
 DELAY_SEC = 4
 

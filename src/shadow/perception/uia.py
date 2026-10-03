@@ -13,12 +13,51 @@ Design notes:
   - No screenshots. No image processing. UIA reads the content model.
 """
 
+# Known limitation: Chromium-based browsers (Chrome, Edge, Brave) only
+# expose their page content to UIA when the Windows screen-reader flag
+# was set *before* the browser started. Our observer sets the flag on
+# startup, but if Chrome is already running, it won't see the change.
+# In that case, the UIA tree contains only the browser's chrome (tabs,
+# address bar) and the observer's OCR fallback handles page content.
+# See _enable_screen_reader_flag() for the flag setter.
+
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
 from .base import PerceptionSource
+
+# Windows SPI_SETSCREENREADER flag. When set, Chromium browsers and
+# some other apps enable their full UIA accessibility tree. Cleared
+# automatically when the process exits.
+_SPI_SETSCREENREADER = 0x0047
+
+
+def _enable_screen_reader_flag() -> None:
+    """Tell Windows a screen reader is active so Chromium apps expose
+    their full accessibility tree. Safe to call repeatedly."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.SystemParametersInfoW(_SPI_SETSCREENREADER, True, None, 0)
+    except Exception:
+        pass
+
+
+def _disable_screen_reader_flag() -> None:
+    """Clear the flag when SHADOW shuts down."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.SystemParametersInfoW(_SPI_SETSCREENREADER, False, None, 0)
+    except Exception:
+        pass
+
 
 # Controls whose "name" typically holds meaningful text.
 _TEXT_CONTROL_TYPES = {
@@ -80,6 +119,8 @@ class UIAutomationSource(PerceptionSource):
     def sample(self) -> dict[str, Any] | None:
         if sys.platform != "win32":
             return None
+
+        _enable_screen_reader_flag()
 
         try:
             import uiautomation as auto

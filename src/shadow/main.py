@@ -14,6 +14,8 @@ def main() -> int:
 
     from PySide6.QtCore import QTimer
 
+    from shadow.perception.uia import _disable_screen_reader_flag
+
     config = load_config()
 
     memory = MemoryStore(
@@ -69,7 +71,15 @@ def main() -> int:
 
     window = MainWindow(backend, memory, config, reporter=reporter)
     window.show()
-    return app.exec()
+
+    try:
+        result = app.exec()
+    finally:
+        from shadow.perception.uia import _disable_screen_reader_flag
+
+        _disable_screen_reader_flag()
+
+    return result
 
 
 if __name__ == "__main__":
