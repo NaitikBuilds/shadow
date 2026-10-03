@@ -1,6 +1,6 @@
 import sys
 
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -35,6 +35,7 @@ from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
+from shadow.ui.diagnostics_panel import DiagnosticsPanel
 from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
@@ -193,6 +194,9 @@ class MainWindow(QMainWindow):
         ambient_action = settings_menu.addAction("Working On…")
         ambient_action.triggered.connect(self.open_ambient_panel)
 
+        diagnostics_action = settings_menu.addAction("Diagnostics…")
+        diagnostics_action.triggered.connect(self.open_diagnostics_panel)
+
         search_menu = menu.addMenu("Search")
         search_action = search_menu.addAction("Search Observations…")
         search_action.triggered.connect(self.open_search_panel)
@@ -257,6 +261,23 @@ class MainWindow(QMainWindow):
         dlg.resize(560, 620)
         layout = QVBoxLayout(dlg)
         layout.addWidget(AmbientPanel(self.ambient_tasks))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_diagnostics_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Diagnostics")
+        dlg.resize(720, 640)
+        layout = QVBoxLayout(dlg)
+
+        observer = getattr(self, "observer", None)
+        panel = DiagnosticsPanel(
+            self.backend, self.memory, self.config, observer=observer
+        )
+        layout.addWidget(panel)
+
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
