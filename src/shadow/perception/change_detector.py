@@ -22,10 +22,12 @@ class ChangeDetector:
         threshold: int = 5,
         hash_size: int = 8,
         min_interval_ms: int = 500,
+        monitor_aware: bool = True,
     ):
         self.threshold = threshold
         self.hash_size = hash_size
         self.min_interval_ms = min_interval_ms
+        self._monitor_aware = monitor_aware
 
         self._last_hash: int | None = None
         self._last_check_at: float = 0.0
@@ -43,6 +45,16 @@ class ChangeDetector:
         """
         if sys.platform != "win32":
             return True
+
+        if bbox is None and self._monitor_aware:
+            try:
+                from .monitors import active_monitor
+
+                m = active_monitor()
+                if m is not None:
+                    bbox = m.bounds
+            except Exception:
+                pass
 
         now = time.monotonic()
         if now - self._last_check_at < self.min_interval_ms / 1000.0:

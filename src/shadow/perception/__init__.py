@@ -15,6 +15,13 @@ from .interactive import (
     InteractiveElement,
     InteractiveExtractor,
 )
+from .monitors import (
+    MonitorInfo,
+    active_monitor,
+    list_monitors,
+    monitor_for_rect,
+    primary_monitor,
+)
 from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
 from .screen_uia import ScreenUIASource
@@ -63,4 +70,9 @@ __all__ = [
     "ChangeDetector",
     "AdaptiveCadence",
     "CadenceInfo",
+    "MonitorInfo",
+    "active_monitor",
+    "list_monitors",
+    "monitor_for_rect",
+    "primary_monitor",
 ]
