@@ -93,3 +93,25 @@ We don't OCR the scroll bar. That would cost ~200ms per poll and
 contradict the "structured not pixels" goal. If a future Windows or
 Chromium change exposes scroll bars unconditionally, this feature
 automatically improves.
+
+## Routing adjustment (Commit 13.5)
+
+Based on measurements from `scripts/checks/compare_uia_ocr.py`, the
+classifier routes:
+
+- **Browsers**: OCR only. UIA produces ~90 chars vs OCR's ~800 chars
+  on Chromium browsers. UIA is skipped entirely.
+- **Editors**: UIA + OCR fallback. Chromium editors expose thin UIA
+  trees; OCR fills in the content.
+- **Terminals**: OCR only (unchanged).
+- **Everything else**: UIA preferred, OCR fallback.
+
+### When to revert
+
+If any of these change, re-run the harness and adjust:
+
+1. Microsoft/Chromium exposes the full tree without the screen-reader flag.
+2. Phase 3.6 Vision provides better browser content than OCR.
+3. UIA latency drops significantly on Chromium apps.
+
+Each is a one-file change in `window_classifier.py`.

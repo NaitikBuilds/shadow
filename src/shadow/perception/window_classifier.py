@@ -219,17 +219,25 @@ class WindowClassifier:
         cat = profile.category
 
         if cat == WindowCategory.BROWSER:
-            profile.use_uia = True
+            # Measured (Commit 13 harness): Chromium browsers expose
+            # ~90 chars via UIA and ~800 chars via OCR because the UIA
+            # tree is gated behind the screen-reader flag. Route to OCR
+            # until Microsoft/Chromium changes this, or Phase 3.6
+            # Vision supersedes both.
+            profile.use_uia = False
             profile.use_ocr = True
             profile.extract_url = True
-            profile.notes.append("url extraction enabled")
+            profile.notes.append("url extraction enabled; UIA skipped")
             return
 
         if cat == WindowCategory.EDITOR:
+            # Chromium editors (VS Code, Codium, Atom) also expose thin
+            # UIA trees. Enable OCR fallback so code content still gets
+            # recorded. The change gate bounds OCR cost.
             profile.use_uia = True
-            profile.use_ocr = False
+            profile.use_ocr = True
             profile.extract_path = True
-            profile.notes.append("path extraction enabled")
+            profile.notes.append("path extraction enabled; OCR fallback on")
             return
 
         if cat == WindowCategory.TERMINAL:

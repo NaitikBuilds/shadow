@@ -8,7 +8,8 @@ def test_browser_detected():
     c = WindowClassifier()
     profile = c.classify("chrome.exe", "GitHub — chrome")
     assert profile.category == WindowCategory.BROWSER
-    assert profile.use_uia is True
+    # Measured: OCR wins on Chromium browsers (see Commit 13 harness)
+    assert profile.use_uia is False
     assert profile.use_ocr is True
     assert profile.extract_url is True
 
@@ -17,6 +18,7 @@ def test_edge_detected():
     c = WindowClassifier()
     profile = c.classify("msedge.exe", "Docs")
     assert profile.category == WindowCategory.BROWSER
+    assert profile.use_uia is False
 
 
 def test_vscode_is_editor():
@@ -25,7 +27,8 @@ def test_vscode_is_editor():
     assert profile.category == WindowCategory.EDITOR
     assert profile.extract_path is True
     assert profile.extract_url is False
-    assert profile.use_ocr is False
+    # Editors now enable OCR fallback for Chromium-based editors
+    assert profile.use_ocr is True
 
 
 def test_visual_studio_is_editor():

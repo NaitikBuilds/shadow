@@ -68,10 +68,10 @@ class ObservationWorker(QThread):
         self.sources = []
         if source_enabled(config, "active_window"):
             self.sources.append(ActiveWindowSource())
-        if source_enabled(config, "screen_ocr"):
-            self.sources.append(ScreenOCRSource(classifier=self.classifier))
         if source_enabled(config, "screen_uia"):
             self.sources.append(ScreenUIASource(classifier=self.classifier))
+        if source_enabled(config, "screen_ocr"):
+            self.sources.append(ScreenOCRSource(classifier=self.classifier))
         if source_enabled(config, "typing_dynamics"):
             tcfg = self.pcfg.get("typing") or {}
             self.sources.append(
@@ -176,12 +176,14 @@ class ObservationWorker(QThread):
         # Change gate: skip screen sources when nothing has changed.
         screen_changed = self.change_detector.has_changed()
 
+        uia_thin = False
+
         for source in self.sources:
             if not self.memory.get_consent(source.channel):
                 continue
             if getattr(source, "is_screen_source", False) and not screen_changed:
                 continue
-            if source.name == "screen_ocr" and not run_ocr:
+            if source.name == "screen_ocr" and not run_ocr and not uia_thin:
                 continue
 
             try:
@@ -195,7 +197,12 @@ class ObservationWorker(QThread):
 
             content = self._content_from(source.name, payload)
             if not content:
+                if source.name == "screen_uia":
+                    uia_thin = True
                 continue
+
+            if source.name == "screen_uia" and len(content) < 200:
+                uia_thin = True
 
             # Redact secrets before storage or embedding.
             try:
