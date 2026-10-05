@@ -194,6 +194,25 @@ Revisit: If we add a Linux port.
 
 ## Documentation
 
+**2026-10 — Browsers route to OCR, not UIA.**
+Reason: Chromium browsers expose ~90 chars via UIA vs ~800 via OCR because
+the UIA tree is gated behind the screen-reader flag set at browser startup.
+Measured in Commit 13 harness. Route to OCR until Microsoft/Chromium changes
+this or Phase 3.6 Vision supersedes both.
+Revisit: If Chromium exposes its tree without the flag, or if VLM analysis
+beats OCR on browser content.
+
+**2026-10 — Editors use UIA with OCR fallback.**
+Reason: Chromium editors (VS Code, Codium) also expose thin UIA trees.
+Enable OCR fallback so code content still gets recorded. Change gate
+bounds the cost.
+Revisit: Same triggers as browser routing.
+
+**2026-10 — Phase 3.5 i18n still deferred.**
+Reason: Same as before. Externalizing strings without translations is churn.
+Phase 8 (packaging) is the right time.
+Revisit: Phase 8.
+
 **2026-10-03 — Phase 3 (Proactive Intelligence) complete.**
 Reason: 24 commits delivered the Insight framework, 8 proactive engines,
 prompt-injection defense (PromptBuilder + taint), secret redaction, person

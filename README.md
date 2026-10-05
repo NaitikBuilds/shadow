@@ -27,8 +27,8 @@ The project is developed in the open for learning and portfolio purposes, but is
 | Extended perception | ✅ Complete |
 | Infrastructure hardening | ✅ Complete |
 | Proactive intelligence | ✅ Complete |
-| Structured screen (UIA) | 🔒 Next |
-| Vision understanding | 🔒 Planned |
+| Structured screen (UIA) | ✅ Complete |
+| Vision understanding | 🔒 Next |
 | Agentic actions | 🔒 Planned |
 
 Development is part-time and ongoing. No release schedule.
@@ -45,11 +45,17 @@ Development is part-time and ongoing. No release schedule.
 - Streaming chat interface backed by a small local language model
 
 **Perception**
-- Active window, screen OCR, typing dynamics
-- Document / PDF ingestion
+- Active window, screen OCR, structured UIA reading
+- Window classifier routes to the right extraction path per app
+- Typing dynamics, document / PDF ingestion
 - Calendar ingestion (`.ics` + WinRT when packaged)
-- Clipboard awareness with sensitive-content filtering
-- Adaptive observation budget (dynamic tick rate)
+- Clipboard awareness with secret filtering
+- URL and file path detection
+- Tab awareness (browser + terminal)
+- Screen change detection (perceptual hash)
+- Adaptive observation cadence
+- Multi-monitor awareness
+- Reading position memory
 
 **Proactive engines**
 - Unfinished-work recovery
@@ -63,6 +69,7 @@ Development is part-time and ongoing. No release schedule.
 - Focus patterns
 - Recurring pattern detection
 - Intent-aware notes
+- Stuck detector (static, alternation, error patterns)
 
 **Control & interface**
 - Consent panel, observation indicator

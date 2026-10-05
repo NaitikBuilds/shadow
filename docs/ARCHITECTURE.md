@@ -98,10 +98,43 @@ Sources:
 
 - `active_window.py` — focused window title + process
 - `screen_ocr.py` — Windows OCR text of active window
+- `screen_uia.py` — UIA text extraction for structured windows
 - `typing.py` — keystroke timing (never key content)
 - `documents.py` — PDF/TXT/MD/DOCX watcher
 - `calendar.py` — `.ics` file reader
 - `calendar_winrt.py` — WinRT Appointments (inactive until MSIX)
+- `clipboard.py` — clipboard text with secret filtering
+
+Supporting modules (Phase 3.5):
+
+- `uia.py` — UIA element tree reader
+- `uia_text.py` — paragraph-level text extraction
+- `interactive.py` — buttons, links, inputs extraction
+- `window_classifier.py` — category + strategy routing
+- `identifiers.py` — URL and file path detection
+- `tabs.py` — browser/terminal tab awareness
+- `change_detector.py` — perceptual hash for change detection
+- `cadence.py` — adaptive poll frequency
+- `monitors.py` — multi-monitor awareness
+- `reading_position.py` — scroll position + section memory
+
+### Screen routing (Commit 13.5)
+
+The classifier decides which extraction path runs per window:
+
+| Category | UIA | OCR |
+|---|---|---|
+| Browser | Skip | Primary |
+| Editor | Primary | Fallback |
+| Terminal | Skip | Primary |
+| Document | Primary | Fallback |
+| Chat | Primary | Skip |
+| Media | Skip | Skip |
+| Notes | Primary | Skip |
+| Other | Primary | Fallback |
+
+**Reason:** Chromium browsers and Chromium-based editors (VS Code)
+expose thin UIA trees. OCR wins on content. See `docs/UIA_LIMITATIONS.md`.
 
 `observer.py` runs the loop that calls `sample()` on each source on a schedule.
 
@@ -216,6 +249,8 @@ Nine tables + two virtual tables. All migrations live in
 | `schema_meta` | Migration version + model hashes + prune timestamp |
 | `insight_feedback` | 👍/👎 verdicts on insights |
 | `ambient_task_state` | Dismiss/promote decisions for ambient list |
+| `tab_state` | Open tab tracking (first_seen, last_active) |
+| `reading_positions` | Scroll position + section per document |
 
 **WAL mode** is enabled on every connection. `foreign_keys=ON` also set
 per-connection.
