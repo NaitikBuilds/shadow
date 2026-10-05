@@ -7,6 +7,7 @@ from .calendar import CalendarSource
 from .calendar_winrt import WindowsCalendarSource
 from .clipboard import ClipboardSource
 from .documents import DocumentSource
+from .identifiers import IdentifierExtractor, Identifiers
 from .interactive import (
     ElementRole,
     InteractiveElement,
@@ -41,4 +42,6 @@ __all__ = [
     "ElementRole",
     "InteractiveElement",
     "InteractiveExtractor",
+    "IdentifierExtractor",
+    "Identifiers",
 ]

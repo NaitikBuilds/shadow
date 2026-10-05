@@ -307,3 +307,14 @@ def test_is_noise_text_helper():
     assert UIAutomationSource._is_noise_text("\ue100\ue200") is True
     assert UIAutomationSource._is_noise_text("Save") is False
     assert UIAutomationSource._is_noise_text("\ue100Save") is False
+
+
+def test_value_field_default():
+    n = UIANode(name="x", control_type="EditControl")
+    assert n.value == ""
+
+
+def test_value_field_in_to_dict():
+    n = UIANode(name="addr", control_type="EditControl", value="https://x.com")
+    d = n.to_dict()
+    assert d["value"] == "https://x.com"

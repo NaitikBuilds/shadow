@@ -16,13 +16,10 @@ from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src" / "shadow"
 
+# Top-level modules that make or enable network calls.
 NETWORK_MODULES = {
     "requests",
-    "urllib",
-    "urllib2",
     "urllib3",
-    "http",
-    "socket",
     "aiohttp",
     "httpx",
     "websocket",
@@ -30,6 +27,16 @@ NETWORK_MODULES = {
     "ftplib",
     "smtplib",
     "telnetlib",
+}
+
+# Full-path modules that make network calls. These are specific
+# submodules of packages that also contain safe utilities.
+NETWORK_SUBMODULES = {
+    "urllib.request",
+    "urllib.robotparser",
+    "http.client",
+    "http.server",
+    "socket",
 }
 
 WHITELIST = {
@@ -46,7 +53,12 @@ def is_whitelisted(rel_path: str) -> bool:
 
 
 def module_imports(path: Path) -> set[str]:
-    """Return the set of top-level module names imported in a Python file."""
+    """Return imported module names, both top-level and full-path forms.
+
+    Top-level names are used for packages where the entire package is
+    network-related (requests, httpx). Full paths are used for packages
+    like urllib, where only some submodules make network calls.
+    """
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (SyntaxError, OSError):
@@ -56,8 +68,10 @@ def module_imports(path: Path) -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imports.add(alias.name.split(".")[0])
+                imports.add(alias.name)  # full path
+                imports.add(alias.name.split(".")[0])  # top-level
         elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module)
             imports.add(node.module.split(".")[0])
     return imports
 
@@ -68,7 +82,9 @@ def check() -> int:
         rel = str(py_file.relative_to(SRC_ROOT)).replace("\\", "/")
         if is_whitelisted(rel):
             continue
-        bad = module_imports(py_file) & NETWORK_MODULES
+        imports = module_imports(py_file)
+        bad = imports & NETWORK_MODULES
+        bad |= imports & NETWORK_SUBMODULES
         if bad:
             violations.append((rel, bad))
 

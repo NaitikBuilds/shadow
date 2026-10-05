@@ -34,7 +34,11 @@ perception:
     enabled: true
     max_depth: 8
     max_elements: 500
-    min_useful_nodes: 3    
+    min_useful_nodes: 3  
+
+  identifiers:
+    extract_urls: true
+    extract_paths: true    
 
   window_classifier:
     custom_map: {}

@@ -150,3 +150,10 @@ def interactive_config(config: dict) -> dict:
     defaults = {"max_elements": 100}
     user = (config.get("perception") or {}).get("interactive") or {}
     return {**defaults, **user}
+
+
+def identifiers_config(config: dict) -> dict:
+    """Return the perception.identifiers block with safe defaults."""
+    defaults = {"extract_urls": True, "extract_paths": True}
+    user = (config.get("perception") or {}).get("identifiers") or {}
+    return {**defaults, **user}

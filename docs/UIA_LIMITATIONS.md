@@ -43,3 +43,24 @@ control.
 
 The observer (Phase 3.5, Commit 9) uses UIA first and falls back to OCR
 when the UIA tree is empty or thin. Both paths feed the same memory.
+
+## Browser URLs
+
+Chrome and Edge do not expose their address bar content to UIA unless the
+Windows screen-reader flag was set *before* the browser process started.
+SHADOW sets this flag on startup, so:
+
+- **If Chrome/Edge was launched after SHADOW:** address bar URLs are readable.
+- **If Chrome/Edge was already running:** address bar URLs are not readable.
+
+Page URLs are still available in two cases:
+1. The website puts the URL in the window title (rare).
+2. OCR fallback picks it up from the top strip of the window (not currently implemented).
+
+**Impact:** URL detection in SHADOW is best-effort for browsers. File path
+detection for editors works reliably because editor titles contain the
+filename.
+
+**Not a SHADOW bug.** Every Windows screen reader (NVDA, JAWS, Narrator)
+has the same constraint. Any future fix must come from a Chromium or
+Windows change.

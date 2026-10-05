@@ -83,6 +83,7 @@ class UIANode:
     control_type: str
     automation_id: str = ""
     class_name: str = ""
+    value: str = ""  # ValuePattern value, when available
     is_password: bool = False
     is_enabled: bool = True
     is_offscreen: bool = False
@@ -305,16 +306,40 @@ class UIAutomationSource(PerceptionSource):
         except Exception:
             pass
 
+        value = UIAutomationSource._read_value(control, is_password)
+
         return UIANode(
             name=name,
             control_type=control_type,
             automation_id=automation_id,
             class_name=class_name,
+            value=value,
             is_password=is_password,
             is_enabled=is_enabled,
             is_offscreen=is_offscreen,
             bounding_rect=rect,
         )
+
+    @staticmethod
+    def _read_value(control, is_password: bool) -> str:
+        """Return the ValuePattern value if available.
+
+        Chrome's address bar and many Edit controls store their current
+        text in a ValuePattern rather than in Name. Passwords are never
+        read.
+        """
+        if is_password:
+            return ""
+        try:
+            pattern = control.GetValuePattern()
+        except Exception:
+            return ""
+        if pattern is None:
+            return ""
+        try:
+            return (pattern.Value or "").strip()
+        except Exception:
+            return ""
 
     @staticmethod
     def _count_nodes(node: UIANode) -> int:
