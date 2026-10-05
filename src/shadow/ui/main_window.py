@@ -30,6 +30,7 @@ from shadow.agent import (
     RecoveryEngine,
     RecurringPatternEngine,
     SessionMemory,
+    StuckDetector,
     TaintPropagator,
 )
 from shadow.errors import ErrorReporter, Severity
@@ -93,6 +94,7 @@ class MainWindow(QMainWindow):
         self.intent_notes = IntentNotesEngine(self.memory)
         self.dnd = DoNotDisturb(self.memory)
         self.feedback = FeedbackStore(self.memory)
+        self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
@@ -285,6 +287,7 @@ class MainWindow(QMainWindow):
             engines=[
                 self.clipboard_actions,
                 self.intent_notes,
+                self.stuck_detector,
                 self.focus_patterns,
                 self.recurring_patterns,
                 self.recovery_engine,

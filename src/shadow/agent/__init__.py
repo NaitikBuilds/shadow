@@ -15,6 +15,7 @@ from .prompt_builder import PromptBuilder
 from .recovery import RecoveryEngine
 from .recurring import RecurringPatternEngine
 from .sessions import Session, SessionMemory
+from .stuck import StuckDetector
 from .style import StyleMirrorEngine, StyleResult
 from .taint import Taint, TaintedValue, TaintPropagator, max_taint
 
@@ -44,4 +45,5 @@ __all__ = [
     "TaintedValue",
     "TaintPropagator",
     "max_taint",
+    "StuckDetector",
 ]

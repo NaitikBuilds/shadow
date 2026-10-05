@@ -207,3 +207,16 @@ def reading_position_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("reading_position") or {}
     return {**defaults, **user}
+
+
+def stuck_config(config: dict) -> dict:
+    """Return the agent.stuck block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "static_minutes": 20,
+        "alternation_minutes": 15,
+        "alternation_count": 8,
+        "error_lookback_minutes": 5,
+    }
+    user = (config.get("agent") or {}).get("stuck") or {}
+    return {**defaults, **user}

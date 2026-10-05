@@ -156,6 +156,14 @@ capture:
   hotkey: "<ctrl>+<shift>+s"
   output_dir: "~/SHADOW_workspace/captures"  
 
+agent:
+  stuck:
+    enabled: true
+    static_minutes: 20
+    alternation_minutes: 15
+    alternation_count: 8
+    error_lookback_minutes: 5
+
 redaction:
   enabled: true
   redact_emails: false
