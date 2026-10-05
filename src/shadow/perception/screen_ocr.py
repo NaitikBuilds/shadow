@@ -29,12 +29,38 @@ class ScreenOCRSource(PerceptionSource):
 
     name = "screen_ocr"
     channel = "screen_capture"
+    is_screen_source = True
 
-    def __init__(self, max_chars: int = 4000):
+    def __init__(
+        self,
+        max_chars: int = 4000,
+        classifier=None,
+    ):
         self.max_chars = max_chars
+        self.classifier = classifier
+
+    def _should_run(self) -> bool:
+        """Consult the classifier — skip if UIA is the better choice."""
+        if self.classifier is None:
+            return True
+        try:
+            from .active_window import ActiveWindowSource
+
+            window = ActiveWindowSource().sample()
+            if not window:
+                return True
+            profile = self.classifier.classify(
+                process=window.get("process", ""),
+                title=window.get("title", ""),
+            )
+            return profile.use_ocr
+        except Exception:
+            return True
 
     def sample(self) -> dict[str, Any] | None:
         if sys.platform != "win32":
+            return None
+        if not self._should_run():
             return None
         try:
             text = asyncio.run(self._capture_and_ocr())

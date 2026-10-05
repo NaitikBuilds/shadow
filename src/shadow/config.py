@@ -34,6 +34,7 @@ def perception_config(config: dict) -> dict:
         "sources": {
             "active_window": True,
             "screen_ocr": True,
+            "screen_uia": True,
             "typing_dynamics": True,
             "document_watch": True,
             "calendar": True,

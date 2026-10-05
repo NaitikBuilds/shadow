@@ -5,17 +5,25 @@ import time
 
 from PySide6.QtCore import QThread, Signal
 
-from shadow.config import perception_config, redaction_config, source_enabled
+from shadow.config import (
+    change_detection_config,
+    perception_config,
+    redaction_config,
+    source_enabled,
+)
 from shadow.memory import EntityExtractor, GraphBuilder
 from shadow.memory.redaction import Redactor
 from shadow.perception.active_window import ActiveWindowSource
 from shadow.perception.budget import BudgetController
 from shadow.perception.calendar import CalendarSource
 from shadow.perception.calendar_winrt import WindowsCalendarSource
+from shadow.perception.change_detector import ChangeDetector
 from shadow.perception.clipboard import ClipboardSource
 from shadow.perception.documents import DocumentSource
 from shadow.perception.screen_ocr import ScreenOCRSource
+from shadow.perception.screen_uia import ScreenUIASource
 from shadow.perception.typing import TypingDynamicsSource
+from shadow.perception.window_classifier import WindowClassifier
 
 
 class ObservationWorker(QThread):
@@ -39,6 +47,16 @@ class ObservationWorker(QThread):
         self.backend = backend
         self.config = config
         self.pcfg = perception_config(config)
+        ccfg = change_detection_config(config)
+        self.change_detector = ChangeDetector(
+            threshold=ccfg["threshold"],
+            hash_size=ccfg["hash_size"],
+            min_interval_ms=ccfg["min_interval_ms"],
+        )
+        self.classifier = WindowClassifier(
+            custom_map=(self.pcfg.get("window_classifier") or {}).get("custom_map")
+            or {}
+        )
         rcfg = redaction_config(config)
         self.redactor = Redactor(
             enabled=rcfg["enabled"],
@@ -51,7 +69,9 @@ class ObservationWorker(QThread):
         if source_enabled(config, "active_window"):
             self.sources.append(ActiveWindowSource())
         if source_enabled(config, "screen_ocr"):
-            self.sources.append(ScreenOCRSource())
+            self.sources.append(ScreenOCRSource(classifier=self.classifier))
+        if source_enabled(config, "screen_uia"):
+            self.sources.append(ScreenUIASource(classifier=self.classifier))
         if source_enabled(config, "typing_dynamics"):
             tcfg = self.pcfg.get("typing") or {}
             self.sources.append(
@@ -153,8 +173,13 @@ class ObservationWorker(QThread):
             and self._tick_count % self.pcfg["ocr_every_n_ticks"] == 0
         )
 
+        # Change gate: skip screen sources when nothing has changed.
+        screen_changed = self.change_detector.has_changed()
+
         for source in self.sources:
             if not self.memory.get_consent(source.channel):
+                continue
+            if getattr(source, "is_screen_source", False) and not screen_changed:
                 continue
             if source.name == "screen_ocr" and not run_ocr:
                 continue
@@ -223,6 +248,8 @@ class ObservationWorker(QThread):
                 return ""
             title = title[: self.pcfg["max_title_length"]]
             return f"{process}: {title}" if process else title
+        if source_name == "screen_uia":
+            return self._format_uia_content(payload)
         if source_name == "screen_ocr":
             return (payload.get("text") or "").strip()
         if source_name == "typing_dynamics":
@@ -273,3 +300,27 @@ class ObservationWorker(QThread):
             return elapsed_ms > self.pcfg["idle_skip_sec"] * 1000
         except Exception:
             return False
+
+    @staticmethod
+    def _format_uia_content(payload: dict) -> str:
+        """Format a screen_uia payload into observation content."""
+        parts: list[str] = []
+        title = (payload.get("window_title") or "").strip()
+        process = (payload.get("process") or "").strip()
+        if title or process:
+            window_line = f"{process}: {title}".strip(": ")
+            parts.append(f"Window: {window_line}")
+
+        url = payload.get("primary_url")
+        path = payload.get("primary_path")
+        if url:
+            parts.append(f"URL: {url}")
+        if path:
+            parts.append(f"Path: {path}")
+
+        text = (payload.get("text") or "").strip()
+        if text:
+            parts.append("")
+            parts.append(text)
+
+        return "\n".join(parts).strip()

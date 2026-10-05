@@ -78,6 +78,7 @@ perception:
     document_watch: true
     calendar: true
     clipboard: true
+    screen_uia: true
 
   budget:
     enabled: true

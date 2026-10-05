@@ -17,6 +17,7 @@ from .interactive import (
 )
 from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
+from .screen_uia import ScreenUIASource
 from .tabs import (
     RelatedTabs,
     StaleTab,
@@ -39,6 +40,7 @@ __all__ = [
     "ObservationWorker",
     "PerceptionSource",
     "ScreenOCRSource",
+    "ScreenUIASource",
     "TypingDynamicsSource",
     "UIAutomationSource",
     "UIANode",
