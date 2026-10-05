@@ -5,6 +5,7 @@ from .base import PerceptionSource
 from .budget import BudgetController
 from .calendar import CalendarSource
 from .calendar_winrt import WindowsCalendarSource
+from .change_detector import ChangeDetector
 from .clipboard import ClipboardSource
 from .documents import DocumentSource
 from .identifiers import IdentifierExtractor, Identifiers
@@ -56,4 +57,5 @@ __all__ = [
     "TabInfo",
     "TabReader",
     "TabStateTracker",
+    "ChangeDetector",
 ]

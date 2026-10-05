@@ -44,7 +44,13 @@ perception:
     enabled: true
     stale_hours: 6
     retention_days: 7
-    related_min_overlap: 2     
+    related_min_overlap: 2  
+
+  change_detection:
+    enabled: true
+    threshold: 5
+    hash_size: 8
+    min_interval_ms: 500       
 
   window_classifier:
     custom_map: {}

@@ -169,3 +169,15 @@ def tabs_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("tabs") or {}
     return {**defaults, **user}
+
+
+def change_detection_config(config: dict) -> dict:
+    """Return the perception.change_detection block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "threshold": 5,
+        "hash_size": 8,
+        "min_interval_ms": 500,
+    }
+    user = (config.get("perception") or {}).get("change_detection") or {}
+    return {**defaults, **user}
