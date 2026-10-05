@@ -49,3 +49,4 @@ logs/
 
 # Benchmark history (regenerated locally)
 benchmarks/results.jsonl
+benchmarks/uia_vs_ocr.jsonl
