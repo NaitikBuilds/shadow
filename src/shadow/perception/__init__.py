@@ -23,6 +23,11 @@ from .monitors import (
     primary_monitor,
 )
 from .observer import ObservationWorker
+from .reading_position import (
+    ReadingPosition,
+    ReadingPositionReader,
+    ReadingPositionTracker,
+)
 from .screen_ocr import ScreenOCRSource
 from .screen_uia import ScreenUIASource
 from .tabs import (
@@ -75,4 +80,7 @@ __all__ = [
     "list_monitors",
     "monitor_for_rect",
     "primary_monitor",
+    "ReadingPosition",
+    "ReadingPositionReader",
+    "ReadingPositionTracker",
 ]

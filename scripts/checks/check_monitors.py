@@ -5,7 +5,6 @@ import sys
 from shadow.perception import (
     active_monitor,
     list_monitors,
-    primary_monitor,
 )
 
 

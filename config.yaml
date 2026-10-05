@@ -58,7 +58,12 @@ perception:
     max_interval_sec: 60
     idle_interval_sec: 30
     accelerate_multiplier: 0.5
-    backoff_multiplier: 1.5           
+    backoff_multiplier: 1.5   
+
+  reading_position:
+    enabled: true
+    min_change_pct: 5
+    retention_days: 30          
 
   window_classifier:
     custom_map: {}

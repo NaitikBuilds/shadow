@@ -64,3 +64,32 @@ filename.
 **Not a SHADOW bug.** Every Windows screen reader (NVDA, JAWS, Narrator)
 has the same constraint. Any future fix must come from a Chromium or
 Windows change.
+
+## Reading Position Memory
+
+Reading positions require two signals from the active window:
+1. An identifier — URL or file path in the window title.
+2. A vertical scroll bar exposed via UIA.
+
+When either is missing, the tracker silently skips the window. This is
+by design: partial data is worse than no data.
+
+### Apps that usually work
+
+- VS Code, PyCharm, Sublime Text (path + scroll bar)
+- Microsoft Word (path + scroll bar)
+- Notepad with a saved long file (path + scroll bar when scrolled)
+- Windows Settings with scrollable panels (no identifier, so no persist)
+
+### Apps that don't
+
+- Chrome, Edge, Brave — Chromium doesn't expose scroll bars
+- Notepad with untitled content — no file path
+- Any app whose title is just "Untitled" or a bare window name
+
+### What we don't do
+
+We don't OCR the scroll bar. That would cost ~200ms per poll and
+contradict the "structured not pixels" goal. If a future Windows or
+Chromium change exposes scroll bars unconditionally, this feature
+automatically improves.

@@ -196,3 +196,14 @@ def cadence_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("cadence") or {}
     return {**defaults, **user}
+
+
+def reading_position_config(config: dict) -> dict:
+    """Return the perception.reading_position block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "min_change_pct": 5,
+        "retention_days": 30,
+    }
+    user = (config.get("perception") or {}).get("reading_position") or {}
+    return {**defaults, **user}
