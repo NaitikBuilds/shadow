@@ -50,7 +50,15 @@ perception:
     enabled: true
     threshold: 5
     hash_size: 8
-    min_interval_ms: 500       
+    min_interval_ms: 500
+
+  cadence:
+    enabled: true
+    min_interval_sec: 5
+    max_interval_sec: 60
+    idle_interval_sec: 30
+    accelerate_multiplier: 0.5
+    backoff_multiplier: 1.5           
 
   window_classifier:
     custom_map: {}

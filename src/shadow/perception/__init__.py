@@ -3,6 +3,7 @@
 from .active_window import ActiveWindow, ActiveWindowSource
 from .base import PerceptionSource
 from .budget import BudgetController
+from .cadence import AdaptiveCadence, CadenceInfo
 from .calendar import CalendarSource
 from .calendar_winrt import WindowsCalendarSource
 from .change_detector import ChangeDetector
@@ -58,4 +59,6 @@ __all__ = [
     "TabReader",
     "TabStateTracker",
     "ChangeDetector",
+    "AdaptiveCadence",
+    "CadenceInfo",
 ]

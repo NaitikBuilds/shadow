@@ -181,3 +181,17 @@ def change_detection_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("change_detection") or {}
     return {**defaults, **user}
+
+
+def cadence_config(config: dict) -> dict:
+    """Return the perception.cadence block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "min_interval_sec": 5,
+        "max_interval_sec": 60,
+        "idle_interval_sec": 30,
+        "accelerate_multiplier": 0.5,
+        "backoff_multiplier": 1.5,
+    }
+    user = (config.get("perception") or {}).get("cadence") or {}
+    return {**defaults, **user}
