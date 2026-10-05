@@ -38,7 +38,13 @@ perception:
 
   identifiers:
     extract_urls: true
-    extract_paths: true    
+    extract_paths: true   
+
+  tabs:
+    enabled: true
+    stale_hours: 6
+    retention_days: 7
+    related_min_overlap: 2     
 
   window_classifier:
     custom_map: {}

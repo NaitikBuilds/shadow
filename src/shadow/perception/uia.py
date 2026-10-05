@@ -83,9 +83,10 @@ class UIANode:
     control_type: str
     automation_id: str = ""
     class_name: str = ""
-    value: str = ""  # ValuePattern value, when available
+    value: str = ""
     is_password: bool = False
     is_enabled: bool = True
+    is_selected: bool = False
     is_offscreen: bool = False
     bounding_rect: tuple[int, int, int, int] = (0, 0, 0, 0)
     children: list["UIANode"] = field(default_factory=list)
@@ -307,6 +308,7 @@ class UIAutomationSource(PerceptionSource):
             pass
 
         value = UIAutomationSource._read_value(control, is_password)
+        is_selected = UIAutomationSource._read_selected(control)
 
         return UIANode(
             name=name,
@@ -316,6 +318,7 @@ class UIAutomationSource(PerceptionSource):
             value=value,
             is_password=is_password,
             is_enabled=is_enabled,
+            is_selected=is_selected,
             is_offscreen=is_offscreen,
             bounding_rect=rect,
         )
@@ -340,6 +343,25 @@ class UIAutomationSource(PerceptionSource):
             return (pattern.Value or "").strip()
         except Exception:
             return ""
+
+    @staticmethod
+    def _read_selected(control) -> bool:
+        """Return True if the control is a selected item (tab, list row)."""
+        try:
+            if hasattr(control, "IsSelected"):
+                return bool(control.IsSelected)
+        except Exception:
+            pass
+        try:
+            pattern = control.GetSelectionItemPattern()
+        except Exception:
+            return False
+        if pattern is None:
+            return False
+        try:
+            return bool(pattern.IsSelected)
+        except Exception:
+            return False
 
     @staticmethod
     def _count_nodes(node: UIANode) -> int:

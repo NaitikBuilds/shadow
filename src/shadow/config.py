@@ -157,3 +157,15 @@ def identifiers_config(config: dict) -> dict:
     defaults = {"extract_urls": True, "extract_paths": True}
     user = (config.get("perception") or {}).get("identifiers") or {}
     return {**defaults, **user}
+
+
+def tabs_config(config: dict) -> dict:
+    """Return the perception.tabs block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "stale_hours": 6,
+        "retention_days": 7,
+        "related_min_overlap": 2,
+    }
+    user = (config.get("perception") or {}).get("tabs") or {}
+    return {**defaults, **user}

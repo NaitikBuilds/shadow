@@ -15,6 +15,13 @@ from .interactive import (
 )
 from .observer import ObservationWorker
 from .screen_ocr import ScreenOCRSource
+from .tabs import (
+    RelatedTabs,
+    StaleTab,
+    TabInfo,
+    TabReader,
+    TabStateTracker,
+)
 from .typing import TypingDynamicsSource
 from .uia import UIANode, UIAutomationSource
 from .uia_text import TextBlock, UIATextExtractor
@@ -44,4 +51,9 @@ __all__ = [
     "InteractiveExtractor",
     "IdentifierExtractor",
     "Identifiers",
+    "RelatedTabs",
+    "StaleTab",
+    "TabInfo",
+    "TabReader",
+    "TabStateTracker",
 ]
