@@ -38,6 +38,7 @@ class VisionPopup(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setFixedWidth(340)
+        self.setObjectName("VisionPopup")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -47,8 +48,8 @@ class VisionPopup(QFrame):
         layout.addWidget(title)
 
         self.context_label = QLabel("")
+        self.context_label.setObjectName("VisionContext")
         self.context_label.setWordWrap(True)
-        self.context_label.setStyleSheet("color: #666; font-size: 11px;")
         layout.addWidget(self.context_label)
 
         hint = QLabel("Want me to take a look?")
@@ -119,18 +120,41 @@ class VisionPopup(QFrame):
         self.move(x, y)
 
     def _apply_style(self) -> None:
+        """Force light theme with explicit text colors.
+
+        Qt inherits the OS palette by default. In Windows dark mode that
+        means white text on our light background — unreadable. We force
+        every color explicitly so the popup is legible regardless of the
+        system theme.
+        """
         self.setStyleSheet("""
-            VisionPopup {
+            QFrame#VisionPopup {
                 background-color: #ffffff;
                 border: 1px solid #d0d0d0;
                 border-radius: 8px;
             }
-            QLabel { color: #222; }
-            QPushButton {
+            QFrame#VisionPopup QLabel {
+                color: #222222;
+                background-color: transparent;
+            }
+            QFrame#VisionPopup QLabel#VisionContext {
+                color: #666666;
+                font-size: 11px;
+            }
+            QFrame#VisionPopup QPushButton {
+                color: #222222;
+                background-color: #f5f5f5;
                 padding: 4px 10px;
                 border: 1px solid #c0c0c0;
                 border-radius: 4px;
-                background: #f5f5f5;
+                min-width: 60px;
+                font-weight: 500;
             }
-            QPushButton:hover { background: #e8e8e8; }
+            QFrame#VisionPopup QPushButton:hover {
+                color: #000000;
+                background-color: #e8e8e8;
+            }
+            QFrame#VisionPopup QPushButton:pressed {
+                background-color: #d8d8d8;
+            }
             """)

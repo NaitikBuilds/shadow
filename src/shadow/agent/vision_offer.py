@@ -58,7 +58,10 @@ class VisionOfferPolicy:
         if key in self._excluded:
             return False
 
-        last = self._cooldowns.get(key, 0.0)
+        last = self._cooldowns.get(key)
+        if last is None:
+            return True  # never seen before
+
         elapsed = time.monotonic() - last
         return elapsed >= (self.cooldown_min * 60)
 
@@ -94,7 +97,9 @@ class VisionOfferPolicy:
         key = self._normalize(process)
         if key in self._excluded:
             return -1
-        last = self._cooldowns.get(key, 0.0)
+        last = self._cooldowns.get(key)
+        if last is None:
+            return 0
         remaining = (self.cooldown_min * 60) - (time.monotonic() - last)
         return max(0, int(remaining))
 
