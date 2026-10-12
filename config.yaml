@@ -1,81 +1,62 @@
 consent:
-  screen_capture: false # screen content understanding (active window + visible text)
-  document_parsing: false # PDF / doc parsing
-  meeting_audio: false # local ASR when enabled
-  calendar: false # calendar ingestion
-  typing_dynamics: false # pause patterns, rhythm
-  webcam_posture: false # optional coarse affect (heavily gated)
+  screen_capture: false
+  document_parsing: false
+  meeting_audio: false
+  calendar: false
+  typing_dynamics: false
+  webcam_posture: false
   clipboard: false
-
 observation:
   indicator_enabled: true
-  indicator_position: "topbar" # topbar | tray | both
-  default_mode: "balanced" # lite | balanced | active
-  retention_days: 90 # 0 = keep forever
-
+  indicator_position: topbar
+  default_mode: balanced
+  retention_days: 90
 perception:
   enabled: true
-  tick_interval_sec: 30          # how often the observer samples
-  idle_skip_sec: 600             # skip sampling if user is idle this long
-  dedupe_window_sec: 60          # don't repeat identical observations within this window
-
-  # OCR runs on every Nth tick to save CPU (0 = disabled)
+  tick_interval_sec: 30
+  idle_skip_sec: 600
+  dedupe_window_sec: 60
   ocr_every_n_ticks: 3
-
   entity_extraction:
     enabled: true
     known_projects:
-      - SHADOW
-      - Phase 1
-      - Phase 2
-      - Phase 3
-
+    - SHADOW
+    - Phase 1
+    - Phase 2
+    - Phase 3
   uia:
     enabled: true
     max_depth: 8
     max_elements: 500
-    min_useful_nodes: 3  
-
+    min_useful_nodes: 3
   identifiers:
     extract_urls: true
-    extract_paths: true   
-
+    extract_paths: true
   tabs:
     enabled: true
     stale_hours: 6
     retention_days: 7
-    related_min_overlap: 2  
-
+    related_min_overlap: 2
   change_detection:
     enabled: true
     threshold: 5
     hash_size: 8
     min_interval_ms: 500
-
   cadence:
     enabled: true
     min_interval_sec: 5
     max_interval_sec: 60
     idle_interval_sec: 30
     accelerate_multiplier: 0.5
-    backoff_multiplier: 1.5   
-
+    backoff_multiplier: 1.5
   reading_position:
     enabled: true
     min_change_pct: 5
-    retention_days: 30          
-
+    retention_days: 30
   window_classifier:
     custom_map: {}
-    # Example:
-    # custom_map:
-    #   my_app: editor
-    #   another_tool: notes  
-
   interactive:
-    max_elements: 100  
-
-  # Which perception sources are active
+    max_elements: 100
   sources:
     active_window: true
     screen_ocr: true
@@ -84,7 +65,6 @@ perception:
     calendar: true
     clipboard: true
     screen_uia: true
-
   budget:
     enabled: true
     active_multiplier: 0.7
@@ -93,70 +73,59 @@ perception:
     low_battery_threshold: 20
     low_battery_multiplier: 2.0
     min_interval_sec: 5
-    max_interval_sec: 180  
-
-  # Guardrails
+    max_interval_sec: 180
   max_title_length: 200
-  min_title_length: 3            # ignore "untitled", empty titles, etc.  
-
+  min_title_length: 3
   typing:
     pause_threshold_sec: 2.0
     min_keystrokes: 10
-
   documents:
     watch_folders:
-      - "~/Documents"
-      - "~/Downloads"
-      - "~/OneDrive/Documents"
+    - ~/Documents
+    - ~/Downloads
+    - ~/OneDrive/Documents
     extensions:
-      - ".pdf"
-      - ".txt"
-      - ".md"
-      - ".docx"
+    - .pdf
+    - .txt
+    - .md
+    - .docx
     max_file_size_mb: 5
     max_chars: 4000
-
   calendar:
     watch_folders:
-      - "~/Documents"
-      - "~/Downloads"
-      - "~/OneDrive/Documents"
+    - ~/Documents
+    - ~/Downloads
+    - ~/OneDrive/Documents
     lookback_days: 1
-    lookahead_days: 14  
-
+    lookahead_days: 14
 model:
-  path: "models/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+  path: models/Llama-3.2-1B-Instruct-Q4_K_M.gguf
   n_ctx: 2048
   n_threads: 4
   n_gpu_layers: 0
   batch_size: 512
   temperature: 0.7
   max_tokens: 512
-  embedder_model: "models/minilm/model.onnx"
-  embedder_tokenizer: "models/minilm/tokenizer.json"
-
+  embedder_model: models/minilm/model.onnx
+  embedder_tokenizer: models/minilm/tokenizer.json
 memory:
-  db_path: "data/shadow.db"
+  db_path: data/shadow.db
   vector_dim: 384
-
 models:
-  cache_dir: "models"
+  cache_dir: models
   verify_on_load: true
-  auto_download_optional: false  
-
+  auto_download_optional: false
 retention:
-  observations_days: 0          # 0 = keep forever
-  low_value_days: 7             # prune empty/short observations after N days
-  activity_days: 180            # 0 = keep forever
+  observations_days: 0
+  low_value_days: 7
+  activity_days: 180
   error_logs_days: 30
   orphan_observation_hours: 24
-  prune_interval_hours: 24  
-
+  prune_interval_hours: 24
 capture:
   enabled: true
-  hotkey: "<ctrl>+<shift>+s"
-  output_dir: "~/SHADOW_workspace/captures"  
-
+  hotkey: <ctrl>+<shift>+s
+  output_dir: ~/SHADOW_workspace/captures
 agent:
   stuck:
     enabled: true
@@ -164,12 +133,10 @@ agent:
     alternation_minutes: 15
     alternation_count: 8
     error_lookback_minutes: 5
-
 redaction:
   enabled: true
   redact_emails: false
-  placeholder: "[REDACTED]"
-
+  placeholder: '[REDACTED]'
 cloud:
   enabled: true
   fallback_to_local: true
@@ -177,27 +144,26 @@ cloud:
   max_retries: 2
   log_prompts: false
   providers:
-    - name: "groq"
-      enabled: true
-      model: "openai/gpt-oss-120b"
-      env_key: "SHADOW_GROQ_KEY"
-      base_url: "https://api.groq.com/openai/v1"
-      priority: 1
-    - name: "gemini"
-      enabled: true
-      model: "gemini-2.5-flash"
-      env_key: "SHADOW_GEMINI_KEY"
-      base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
-      priority: 2
-    - name: "cerebras"
-      enabled: true
-      model: "llama-3.3-70b"
-      env_key: "SHADOW_CEREBRAS_KEY"
-      base_url: "https://api.cerebras.ai/v1"
-      priority: 3
-
+  - name: groq
+    enabled: true
+    model: openai/gpt-oss-120b
+    env_key: SHADOW_GROQ_KEY
+    base_url: https://api.groq.com/openai/v1
+    priority: 1
+  - name: gemini
+    enabled: true
+    model: gemini-2.5-flash
+    env_key: SHADOW_GEMINI_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    priority: 2
+  - name: cerebras
+    enabled: true
+    model: llama-3.3-70b
+    env_key: SHADOW_CEREBRAS_KEY
+    base_url: https://api.cerebras.ai/v1
+    priority: 3
 modes:
-  default: "balanced"
+  default: balanced
   lite:
     observation_interval_sec: 60
     model_max_tokens: 128

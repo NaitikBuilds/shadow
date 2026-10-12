@@ -37,6 +37,7 @@ from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker
 from shadow.ui.ambient_panel import AmbientPanel
+from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.ui.diagnostics_panel import DiagnosticsPanel
 from shadow.ui.indicator import ObservationIndicator
@@ -237,6 +238,9 @@ class MainWindow(QMainWindow):
         diagnostics_action = settings_menu.addAction("Diagnostics…")
         diagnostics_action.triggered.connect(self.open_diagnostics_panel)
 
+        cloud_action = settings_menu.addAction("Cloud LLM…")
+        cloud_action.triggered.connect(self.open_cloud_panel)
+
         dnd_action = settings_menu.addAction("Do Not Disturb")
         dnd_action.setCheckable(True)
         dnd_action.setChecked(self.dnd.enabled)
@@ -334,6 +338,32 @@ class MainWindow(QMainWindow):
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
         dlg.exec()
+
+    def open_cloud_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Cloud LLM")
+        dlg.resize(640, 720)
+        layout = QVBoxLayout(dlg)
+
+        panel = CloudPanel(self.config)
+        panel.settings_changed.connect(self._on_cloud_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def _on_cloud_changed(self):
+        # Note: a full restart is required for backend swap to take effect.
+        # Show a subtle hint in the chat output.
+        try:
+            self.output.append(
+                "<i>Cloud settings saved. Restart SHADOW for backend "
+                "changes to take effect.</i>"
+            )
+        except Exception:
+            pass
 
     def open_search_panel(self):
         dlg = QDialog(self)

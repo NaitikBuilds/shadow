@@ -349,3 +349,28 @@ def delete_cloud_key(env_key: str) -> bool:
         return True
     except Exception:
         return False
+
+def save_cloud_settings(
+    config_path: str, enabled: bool, fallback_to_local: bool
+) -> bool:
+    """Persist the cloud.enabled and cloud.fallback_to_local flags to YAML.
+
+    Preserves all other config sections and provider entries. Returns
+    True on success.
+    """
+    try:
+        import yaml
+
+        path = ROOT / config_path
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        cloud = data.setdefault("cloud", {})
+        cloud["enabled"] = bool(enabled)
+        cloud["fallback_to_local"] = bool(fallback_to_local)
+
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        return True
+    except Exception:
+        return False
