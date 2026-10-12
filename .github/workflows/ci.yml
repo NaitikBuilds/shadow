@@ -31,7 +31,7 @@ jobs:
         run: python scripts/check_network_isolation.py
 
       - name: Run fast tests
-        run: pytest -m "not slow and not hardware and not injection" -v
+        run: pytest -m "not slow and not hardware and not injection" -v -p no:cacheprovider
 
       - name: Show logs directory (only on failure)
         if: failure()
