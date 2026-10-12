@@ -30,6 +30,7 @@ The project is developed in the open for learning and portfolio purposes, but is
 | Structured screen (UIA) | ✅ Complete |
 | Vision understanding | 🔒 Next |
 | Agentic actions | 🔒 Planned |
+| Cloud LLM integration | ✅ Complete |
 
 Development is part-time and ongoing. No release schedule.
 
@@ -86,6 +87,15 @@ Development is part-time and ongoing. No release schedule.
 - Taint propagation for future action parameters
 - Secret redaction before embedding
 - Network isolation enforced by CI
+
+**Cloud LLM (opt-in)**
+- Optional cloud acceleration for chat via Groq, Gemini, or Cerebras
+- Automatic failover between providers
+- Silent fallback to local model when offline
+- API keys via environment variable or Windows Credential Manager
+- Route indicator shows Cloud / Local / Fallback in real time
+- Prompt preview shows exactly what would be sent
+- Observation and memory never leave the device
 
 ---
 

@@ -26,6 +26,16 @@ element extraction, URL/path detection, tab awareness, change detection,
 adaptive cadence, observer integration, multi-monitor awareness, reading
 position memory, stuck detector, UIA vs OCR comparison harness.
 
+### V1.0 Cloud LLM (Phase 3.7) ✅
+- Multi-provider cloud backend (Groq, Gemini, Cerebras)
+- OpenAI-compatible client with streaming
+- Provider pool with priority failover
+- Health check and automatic local fallback
+- Cloud settings panel with key management
+- Route indicator (Cloud / Local / Fallback)
+- Prompt preview for transparency
+- API keys via env var or Windows Credential Manager
+
 ## Next Phases
 
 ### V1.0 Vision (Phase 3.6)

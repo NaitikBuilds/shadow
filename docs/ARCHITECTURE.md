@@ -40,6 +40,18 @@ compute backend is in use.
 - `cpu_backend.py` — llama.cpp-based chat + embedder wiring
 - `onnx_embedder.py` — quantized MiniLM embedder via ONNX Runtime
 
+### HAL modules (extended in Phase 3.7)
+
+- `base.py` — `InferenceBackend` ABC
+- `cpu_backend.py` — llama.cpp-based local inference
+- `cloud_backend.py` — OpenAI-compatible client for one provider
+- `provider_pool.py` — multi-provider failover with per-provider cooldown
+- `health.py` — cached network probe
+- `hybrid_backend.py` — routes cloud vs local based on connectivity
+- `onnx_embedder.py` — quantized MiniLM embedder via ONNX Runtime
+
+**Routing flow:**
+
 Only this folder knows about specific hardware. Adding a Snapdragon NPU
 backend means adding a new file here and a selection rule in `main.py`.
 
@@ -251,6 +263,7 @@ Nine tables + two virtual tables. All migrations live in
 | `ambient_task_state` | Dismiss/promote decisions for ambient list |
 | `tab_state` | Open tab tracking (first_seen, last_active) |
 | `reading_positions` | Scroll position + section per document |
+| `(no new tables)` | Cloud config lives in `config.yaml`, keys in env var / keyring |
 
 **WAL mode** is enabled on every connection. `foreign_keys=ON` also set
 per-connection.
@@ -387,4 +400,16 @@ shadow/
 
 ---
 
-*Last updated: Phase 2.5 complete.*
+## Network isolation (revised Phase 3.7)
+
+The main process makes zero outbound network calls by default. Two
+whitelisted exceptions:
+
+- `src/shadow/models/manager.py` — model downloads
+- `src/shadow/hal/cloud_backend.py` — cloud LLM calls (opt-in)
+- `src/shadow/hal/health.py` — network reachability probe (whitelisted
+  because it only opens a socket to test connectivity, sends nothing)
+
+Everything else remains network-free, enforced by CI.
+
+*Last updated: Phase 3.7 complete.*

@@ -194,6 +194,35 @@ Revisit: If we add a Linux port.
 
 ## Documentation
 
+**2026-10 — Cloud LLM integration as opt-in hybrid.**
+Reason: Local CPU inference cannot deliver both instant response and
+intelligent answers on 16 GB hardware. Cloud LLMs solve both. SHADOW
+keeps observation, memory, knowledge graph, and insights on-device.
+Only the chat prompt may go to cloud, bounded by PromptBuilder and
+redaction. Cloud is off by default. See Section 43 of the PRD.
+Revisit: Never. This is the correct architecture for a local-first
+assistant on consumer hardware.
+
+**2026-10 — Three providers: Groq, Gemini, Cerebras.**
+Reason: All three offer free tiers, OpenAI-compatible endpoints, and
+no-credit-card signup. Different strengths: Groq = fastest, Gemini =
+smartest, Cerebras = most tokens per day. Provider pool tries them in
+priority order with automatic failover.
+Revisit: If a provider deprecates its free tier or OpenAI-compatible
+endpoint.
+
+**2026-10 — API keys in env vars or Windows Credential Manager.**
+Reason: Never store keys in SQLite or config.yaml. Env var is primary
+path; keyring is a fallback for users who prefer UI. Keys never logged.
+Revisit: Never.
+
+**2026-10 — Route indicator and prompt preview for transparency.**
+Reason: The user should know at a glance whether cloud is being used,
+and be able to see exactly what was sent. Transparency is what makes
+the "cloud is opt-in" claim verifiable. See PRD FR-CLOUD-07 and
+FR-CLOUD-08.
+Revisit: Never.
+
 **2026-10 — Browsers route to OCR, not UIA.**
 Reason: Chromium browsers expose ~90 chars via UIA vs ~800 via OCR because
 the UIA tree is gated behind the screen-reader flag set at browser startup.
