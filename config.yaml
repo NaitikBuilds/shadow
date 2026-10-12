@@ -125,10 +125,11 @@ perception:
     lookahead_days: 14  
 
 model:
-  path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-  n_ctx: 4096
-  n_threads: 6
+  path: "models/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+  n_ctx: 2048
+  n_threads: 4
   n_gpu_layers: 0
+  batch_size: 512
   temperature: 0.7
   max_tokens: 512
   embedder_model: "models/minilm/model.onnx"

@@ -28,13 +28,13 @@ class ModelSpec:
 MODELS: dict[str, ModelSpec] = {
     "chat": ModelSpec(
         id="chat",
-        name="Qwen2.5-1.5B-Instruct (Q4_K_M)",
-        filename="qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        name="Llama-3.2-1B-Instruct (Q4_K_M)",
+        filename="Llama-3.2-1B-Instruct-Q4_K_M.gguf",
         url=(
-            "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/"
-            "resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/"
+            "resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
         ),
-        size_bytes=1_117_320_736,
+        size_bytes=770_000_000,
         role="chat",
         optional=False,
     ),
