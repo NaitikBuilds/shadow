@@ -64,13 +64,25 @@ MODELS: dict[str, ModelSpec] = {
     ),
     "vision": ModelSpec(
         id="vision",
-        name="Moondream2 (Q4, GGUF)",
-        filename="moondream2/moondream2-q4.gguf",
+        name="Moondream2 text model (F16 GGUF)",
+        filename="moondream2/moondream2-text-model-f16.gguf",
         url=(
             "https://huggingface.co/vikhyatk/moondream2/"
             "resolve/main/moondream2-text-model-f16.gguf"
         ),
         size_bytes=1_800_000_000,
+        role="vision",
+        optional=True,
+    ),
+    "vision_mmproj": ModelSpec(
+        id="vision_mmproj",
+        name="Moondream2 vision encoder (F16 mmproj)",
+        filename="moondream2/moondream2-mmproj-f16.gguf",
+        url=(
+            "https://huggingface.co/vikhyatk/moondream2/"
+            "resolve/main/moondream2-mmproj-f16.gguf"
+        ),
+        size_bytes=700_000_000,
         role="vision",
         optional=True,
     ),

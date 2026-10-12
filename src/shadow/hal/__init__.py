@@ -20,6 +20,7 @@ from .cloud_backend import (
 from .cpu_backend import CpuBackend
 from .health import HealthMonitor
 from .hybrid_backend import HybridBackend
+from .moondream_backend import Moondream2Backend
 from .provider_pool import AllProvidersFailed, ProviderPool, ProviderState
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "TASK_OCR",
     "TASK_QUERY",
     "VALID_TASKS",
+    "Moondream2Backend",
 ]
