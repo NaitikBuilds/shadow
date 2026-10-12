@@ -93,7 +93,10 @@ def test_build_pool_returns_none_when_disabled(clean_env):
     assert build_provider_pool(cfg) is None
 
 
-def test_build_pool_returns_none_when_no_keys(clean_env):
+def test_build_pool_returns_none_when_no_keys(clean_env, monkeypatch):
+    # Block both sources: env (via clean_env) and keyring (via monkeypatch)
+    monkeypatch.setattr("shadow.config.resolve_key", lambda env_key: "")
+
     cfg = {
         "cloud": {
             "enabled": True,

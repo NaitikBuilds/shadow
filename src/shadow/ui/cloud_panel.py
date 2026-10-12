@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -217,11 +218,12 @@ class CloudPanel(QWidget):
 
     settings_changed = Signal()
 
-    def __init__(self, config: dict, pool=None):
+    def __init__(self, config: dict, pool=None, backend=None):
         super().__init__()
         self.config = config
         self.cfg = cloud_config(config)
         self.pool = pool
+        self.backend = backend
 
         layout = QVBoxLayout(self)
 
@@ -262,6 +264,34 @@ class CloudPanel(QWidget):
         self.fallback_cb.setChecked(bool(self.cfg.get("fallback_to_local", True)))
         layout.addWidget(self.fallback_cb)
 
+        # Prompt preview
+        preview_title = QLabel("<b>Last prompt sent</b>")
+        layout.addWidget(preview_title)
+        preview_hint = QLabel(
+            "See exactly what was sent to the cloud provider. "
+            "Nothing shown here is stored on disk."
+        )
+        preview_hint.setWordWrap(True)
+        preview_hint.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(preview_hint)
+
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setMaximumHeight(160)
+        self.preview_text.setStyleSheet(
+            "font-family: Consolas, monospace; font-size: 11px;"
+        )
+        layout.addWidget(self.preview_text)
+
+        preview_row = QHBoxLayout()
+        preview_row.addStretch()
+        refresh_btn = QPushButton("Refresh preview")
+        refresh_btn.clicked.connect(self._refresh_preview)
+        preview_row.addWidget(refresh_btn)
+        layout.addLayout(preview_row)
+
+        self._refresh_preview()
+
         # Save button
         save_row = QHBoxLayout()
         save_row.addStretch()
@@ -288,3 +318,23 @@ class CloudPanel(QWidget):
             self.config.setdefault("cloud", {})["enabled"] = enabled
             self.config["cloud"]["fallback_to_local"] = fallback
             self.settings_changed.emit()
+
+    def _refresh_preview(self):
+        if self.backend is None:
+            self.preview_text.setPlainText("(no active backend to preview)")
+            return
+        try:
+            info = self.backend.info if hasattr(self.backend, "info") else {}
+            prompt = info.get("last_prompt", "")
+        except Exception:
+            prompt = ""
+
+        if not prompt:
+            self.preview_text.setPlainText(
+                "(no prompt sent yet — ask SHADOW a question first)"
+            )
+            return
+
+        # Truncate long prompts for display
+        display = prompt if len(prompt) <= 4000 else prompt[:4000] + "\n…"
+        self.preview_text.setPlainText(display)

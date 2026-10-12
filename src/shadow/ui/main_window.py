@@ -110,10 +110,17 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
 
         info = backend.info
-        self.backend_label = QLabel(
-            f"Backend: {info['backend'].upper()}  •  threads: {info.get('threads', '?')}"
-        )
+        backend_name = info.get("backend", "cpu").upper()
+        self.backend_label = QLabel(f"Backend: {backend_name}")
         layout.addWidget(self.backend_label)
+
+        self.route_chip = QLabel("Route: —")
+        self.route_chip.setStyleSheet(
+            "padding: 2px 8px; border-radius: 8px; "
+            "background-color: #eee; color: #333; font-size: 11px;"
+        )
+        layout.addWidget(self.route_chip)
+        self._refresh_route_chip()
 
         self.indicator = ObservationIndicator(self.memory, self.config)
         layout.addWidget(self.indicator)
@@ -345,7 +352,7 @@ class MainWindow(QMainWindow):
         dlg.resize(640, 720)
         layout = QVBoxLayout(dlg)
 
-        panel = CloudPanel(self.config)
+        panel = CloudPanel(self.config, backend=self.backend)
         panel.settings_changed.connect(self._on_cloud_changed)
         layout.addWidget(panel)
 
@@ -420,6 +427,37 @@ class MainWindow(QMainWindow):
         self.observer_status.setText(f"Observer error: {message[:80]}")
         self.memory.log_activity("observer_error", message[:120])
 
+    def _refresh_route_chip(self):
+        """Update the route chip based on backend info."""
+        try:
+            info = self.backend.info if hasattr(self.backend, "info") else {}
+        except Exception:
+            info = {}
+
+        backend_name = info.get("backend", "cpu")
+        route = info.get("route", "local")
+        online = info.get("online")
+
+        if backend_name == "hybrid":
+            if not online:
+                text, color, bg = "Route: Local (offline)", "#fff", "#e67e22"
+            elif route == "cloud":
+                text, color, bg = "Route: Cloud", "#fff", "#2ecc71"
+            elif route == "local_fallback":
+                text, color, bg = "Route: Local (fallback)", "#fff", "#e74c3c"
+            elif route == "local_offline":
+                text, color, bg = "Route: Local", "#333", "#ddd"
+            else:
+                text, color, bg = "Route: —", "#333", "#eee"
+        else:
+            text, color, bg = "Route: Local (CPU)", "#333", "#ddd"
+
+        self.route_chip.setText(text)
+        self.route_chip.setStyleSheet(
+            f"padding: 2px 8px; border-radius: 8px; "
+            f"background-color: {bg}; color: {color}; font-size: 11px;"
+        )
+
     def _on_quick_capture(self, path: str):
         try:
             if hasattr(self, "tray"):
@@ -487,12 +525,14 @@ class MainWindow(QMainWindow):
             return
         self.output.append("")
         self.memory.log_activity("query", "completed")
+        self._refresh_route_chip()
 
     def on_error(self, message: str):
         if self._shutting_down:
             return
         self.output.append(f"<b style='color:red'>Error:</b> {message}")
         self.memory.log_activity("error", message[:120])
+        self._refresh_route_chip()
 
     def wipe_shadow(self):
         self.memory.wipe()

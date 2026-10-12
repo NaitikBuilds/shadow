@@ -88,6 +88,8 @@ class CloudBackend(InferenceBackend):
         self.max_retries = max_retries
         self.system_prompt = system_prompt
         self._client = self._make_client()
+        self.last_prompt: str = ""
+        self.last_prompt_at: float = 0.0
 
     # ---------- public API ----------
 
@@ -97,6 +99,11 @@ class CloudBackend(InferenceBackend):
     def generate_stream(self, prompt: str, **kwargs) -> Iterator[str]:
         max_tokens = kwargs.get("max_tokens", 512)
         temperature = kwargs.get("temperature", 0.7)
+
+        import time as _time
+
+        self.last_prompt = prompt
+        self.last_prompt_at = _time.time()
 
         payload = {
             "model": self.provider.model,

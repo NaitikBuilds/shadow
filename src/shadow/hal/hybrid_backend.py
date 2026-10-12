@@ -27,6 +27,7 @@ class HybridBackend(InferenceBackend):
         self.local = local
         self.health = health or HealthMonitor()
         self._last_used: str = "unknown"
+        self.last_prompt_at: float = 0.0
 
     # ---------- public API ----------
 
@@ -34,6 +35,10 @@ class HybridBackend(InferenceBackend):
         return "".join(self.generate_stream(prompt, **kwargs)).strip()
 
     def generate_stream(self, prompt: str, **kwargs) -> Iterator[str]:
+        import time as _time
+
+        self.last_prompt_at = _time.time()
+
         if self.health.is_online():
             self._last_used = "cloud"
             try:
@@ -61,7 +66,19 @@ class HybridBackend(InferenceBackend):
             "online": self.health.is_online(),
             "local": local_info,
             "cloud": cloud_info,
+            "last_prompt": self.last_prompt,
+            "last_prompt_at": self.last_prompt_at,
         }
+
+    @property
+    def last_prompt(self) -> str:
+        """Return the most recent prompt actually sent, or empty."""
+        # Pull from the cloud provider if it ran; else fall back to local.
+        if self._last_used.startswith("cloud"):
+            for state in getattr(self.cloud, "_states", []):
+                if state.backend.last_prompt:
+                    return state.backend.last_prompt
+        return ""
 
     def close(self) -> None:
         for backend in (self.cloud, self.local):
