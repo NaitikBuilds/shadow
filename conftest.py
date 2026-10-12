@@ -1,15 +1,19 @@
-"""Pytest-wide fixtures for SHADOW."""
+"""Pytest session-wide cleanup for SHADOW.
+
+On Windows CI runners, PySide6 and Pillow can leave resources alive
+that cause the interpreter to exit with code 1 even after all tests
+pass. Explicitly quitting Qt and forcing garbage collection at end
+of session helps the interpreter exit cleanly.
+"""
+
+import gc
 
 import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _qt_cleanup():
-    """Ensure any Qt QApplication is quit at end of session.
-
-    Without this, PySide6 can leave native resources alive and the
-    process returns exit code 1 on Windows even when all tests passed.
-    """
+def _final_cleanup():
+    """Quit Qt and force GC at end of session."""
     yield
     try:
         from PySide6.QtWidgets import QApplication
@@ -17,6 +21,9 @@ def _qt_cleanup():
         app = QApplication.instance()
         if app is not None:
             app.quit()
-            app.processEvents()
+    except Exception:
+        pass
+    try:
+        gc.collect()
     except Exception:
         pass
