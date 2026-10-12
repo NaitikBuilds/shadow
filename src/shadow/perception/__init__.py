@@ -30,6 +30,7 @@ from .reading_position import (
 )
 from .screen_ocr import ScreenOCRSource
 from .screen_uia import ScreenUIASource
+from .screen_vision import ScreenVisionSource
 from .tabs import (
     RelatedTabs,
     StaleTab,
@@ -83,4 +84,5 @@ __all__ = [
     "ReadingPosition",
     "ReadingPositionReader",
     "ReadingPositionTracker",
+    "ScreenVisionSource",
 ]

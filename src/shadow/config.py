@@ -388,5 +388,7 @@ def vision_config(config: dict) -> dict:
         "unload_after_sec": 300,
         "prompt_cooldown_min": 15,
         "require_thin_text": True,
+        "image_max_side": 1024,
+        "image_max_bytes": 10 * 1024 * 1024,
     }
     return {**defaults, **(config.get("vision") or {})}
