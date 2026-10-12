@@ -220,3 +220,132 @@ def stuck_config(config: dict) -> dict:
     }
     user = (config.get("agent") or {}).get("stuck") or {}
     return {**defaults, **user}
+
+
+def cloud_config(config: dict) -> dict:
+    """Return the cloud block with safe defaults filled in.
+
+    Provider entries are deep-merged with the default provider list
+    so partial overrides don't remove default providers.
+    """
+    defaults = {
+        "enabled": False,
+        "fallback_to_local": True,
+        "timeout_sec": 30,
+        "max_retries": 2,
+        "log_prompts": False,
+        "providers": [],
+    }
+    user = config.get("cloud") or {}
+    merged = {**defaults, **user}
+
+    # If the user provided a providers list, use it verbatim.
+    # If not, no providers are configured.
+    providers = user.get("providers")
+    if isinstance(providers, list):
+        merged["providers"] = providers
+    else:
+        merged["providers"] = []
+
+    return merged
+
+
+def cloud_enabled(config: dict) -> bool:
+    """Return True if cloud LLM is enabled in config."""
+    return bool(cloud_config(config).get("enabled", False))
+
+
+def resolve_key(env_key: str) -> str:
+    """Resolve an API key from env var, then Windows Credential Manager.
+
+    Returns empty string if not found. Never raises.
+    """
+    if not env_key:
+        return ""
+
+    import os
+
+    value = os.environ.get(env_key, "").strip()
+    if value:
+        return value
+
+    # Try Windows Credential Manager via keyring
+    try:
+        import keyring
+
+        value = keyring.get_password("SHADOW", env_key)
+        if value:
+            return value.strip()
+    except Exception:
+        pass
+
+    return ""
+
+
+def build_provider_pool(config: dict, local_backend=None):
+    """Construct a ProviderPool from config.
+
+    Returns None if cloud is disabled or no providers have keys.
+
+    Import is local to avoid a circular dependency: config.py must
+    stay importable without hal/ imports at module load time.
+    """
+    if not cloud_enabled(config):
+        return None
+
+    from shadow.hal.cloud_backend import CloudBackend, ProviderConfig
+    from shadow.hal.provider_pool import ProviderPool
+
+    cfg = cloud_config(config)
+    providers = []
+
+    for entry in cfg.get("providers") or []:
+        if not entry.get("enabled", True):
+            continue
+        env_key = entry.get("env_key", "")
+        api_key = resolve_key(env_key)
+        if not api_key:
+            continue
+        provider_cfg = ProviderConfig(
+            name=entry.get("name", "unknown"),
+            base_url=entry.get("base_url", ""),
+            model=entry.get("model", ""),
+            api_key=api_key,
+        )
+        backend = CloudBackend(
+            provider=provider_cfg,
+            timeout_sec=cfg.get("timeout_sec", 30),
+            max_retries=cfg.get("max_retries", 2),
+        )
+        providers.append((entry.get("priority", 99), backend))
+
+    if not providers:
+        return None
+
+    fallback = local_backend if cfg.get("fallback_to_local") else None
+    return ProviderPool(providers=providers, local_fallback=fallback)
+
+
+def set_cloud_key(env_key: str, value: str) -> bool:
+    """Store an API key in Windows Credential Manager.
+
+    Returns True on success, False otherwise.
+    """
+    try:
+        import keyring
+
+        keyring.set_password("SHADOW", env_key, value)
+        return True
+    except Exception:
+        return False
+
+
+def delete_cloud_key(env_key: str) -> bool:
+    """Remove an API key from Windows Credential Manager."""
+    try:
+        import keyring
+
+        keyring.delete_password("SHADOW", env_key)
+        return True
+    except Exception:
+        return False

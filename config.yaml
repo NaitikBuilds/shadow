@@ -170,6 +170,31 @@ redaction:
   redact_emails: false
   placeholder: "[REDACTED]"
 
+cloud:
+  enabled: true
+  fallback_to_local: true
+  timeout_sec: 30
+  max_retries: 2
+  log_prompts: false
+  providers:
+    - name: "groq"
+      enabled: true
+      model: "llama-3.3-70b-versatile"
+      env_key: "SHADOW_GROQ_KEY"
+      base_url: "https://api.groq.com/openai/v1"
+      priority: 1
+    - name: "gemini"
+      enabled: true
+      model: "gemini-2.5-flash"
+      env_key: "SHADOW_GEMINI_KEY"
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+      priority: 2
+    - name: "cerebras"
+      enabled: true
+      model: "llama-3.3-70b"
+      env_key: "SHADOW_CEREBRAS_KEY"
+      base_url: "https://api.cerebras.ai/v1"
+      priority: 3
 
 modes:
   default: "balanced"
