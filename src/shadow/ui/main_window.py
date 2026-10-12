@@ -36,7 +36,7 @@ from shadow.agent import (
 )
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
-from shadow.perception import ObservationWorker, ScreenVisionSource
+from shadow.perception import ObservationWorker, ScreenVisionSource, VisionHotkeys
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
@@ -122,6 +122,17 @@ class MainWindow(QMainWindow):
                 vision_service,
                 classifier=getattr(self, "classifier", None),
             )
+
+        self.vision_hotkeys = None
+        if vision_service is not None:
+            self.vision_hotkeys = VisionHotkeys(
+                enabled=bool(self.config.get("vision", {}).get("enabled", True))
+            )
+            self.vision_hotkeys.vision_requested.connect(self._run_vision_now)
+            self.vision_hotkeys.region_capture_requested.connect(
+                self._on_region_capture_requested
+            )
+            self.vision_hotkeys.start()
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
         self.retriever = ShadowRetriever(self.memory, self.backend)
@@ -249,6 +260,13 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _on_region_capture_requested(self):
+        """Handle Ctrl+Shift+Q. Real implementation lands in Commit 13."""
+        self.output.append(
+            "<i>Region capture is coming soon. "
+            "Try Ctrl+Shift+V to caption the active window.</i>"
+        )
+
     # ---------- menu (NEW in Commit 3) ----------
 
     def _build_menu(self):
@@ -275,6 +293,9 @@ class MainWindow(QMainWindow):
 
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
+
+        hotkey_action = settings_menu.addAction("Vision active window (Ctrl+Shift+V)")
+        hotkey_action.triggered.connect(self._run_vision_now)
 
         dnd_action = settings_menu.addAction("Do Not Disturb")
         dnd_action.setCheckable(True)
@@ -673,6 +694,9 @@ class MainWindow(QMainWindow):
             self.observer.stop()
             if not self.observer.wait(3000):
                 print("[shadow] observer did not stop within 3 s")
+
+        if hasattr(self, "vision_hotkeys") and self.vision_hotkeys is not None:
+            self.vision_hotkeys.stop()
 
         # Stop quick capture hotkey listener
         if hasattr(self, "quick_capture"):

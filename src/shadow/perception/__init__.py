@@ -9,6 +9,7 @@ from .calendar_winrt import WindowsCalendarSource
 from .change_detector import ChangeDetector
 from .clipboard import ClipboardSource
 from .documents import DocumentSource
+from .hotkeys import VisionHotkeys
 from .identifiers import IdentifierExtractor, Identifiers
 from .interactive import (
     ElementRole,
@@ -85,4 +86,5 @@ __all__ = [
     "ReadingPositionReader",
     "ReadingPositionTracker",
     "ScreenVisionSource",
+    "VisionHotkeys",
 ]
