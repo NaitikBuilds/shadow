@@ -74,11 +74,19 @@ class InferenceWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, backend, memory, config, reporter: ErrorReporter | None = None):
+    def __init__(
+        self,
+        backend,
+        memory,
+        config,
+        reporter: ErrorReporter | None = None,
+        vision_service=None,
+    ):
         super().__init__()
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.vision_service = vision_service
         self.recovery_engine = RecoveryEngine(self.memory)
         self.focus_shield = FocusShield(self.memory)
         self.forecasting_engine = ForecastingEngine(self.memory)

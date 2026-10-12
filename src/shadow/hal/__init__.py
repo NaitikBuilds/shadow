@@ -22,6 +22,7 @@ from .health import HealthMonitor
 from .hybrid_backend import HybridBackend
 from .moondream_backend import Moondream2Backend
 from .provider_pool import AllProvidersFailed, ProviderPool, ProviderState
+from .vision_service import VisionService
 
 __all__ = [
     "AllProvidersFailed",
@@ -44,4 +45,5 @@ __all__ = [
     "TASK_QUERY",
     "VALID_TASKS",
     "Moondream2Backend",
+    "VisionService",
 ]

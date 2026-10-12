@@ -162,6 +162,17 @@ cloud:
     env_key: SHADOW_CEREBRAS_KEY
     base_url: https://api.cerebras.ai/v1
     priority: 3
+
+vision:
+  enabled: true
+  text_model_path: "models/moondream2/moondream2-text-model-f16.gguf"
+  mmproj_path: "models/moondream2/moondream2-mmproj-f16.gguf"
+  n_threads: 4
+  n_ctx: 2048
+  unload_after_sec: 300
+  prompt_cooldown_min: 15
+  require_thin_text: true
+      
 modes:
   default: balanced
   lite:

@@ -50,6 +50,25 @@ def main() -> int:
                 health=HealthMonitor(),
             )
 
+    # Vision service — lazy loaded, on-demand only.
+    from shadow.config import vision_config
+    from shadow.hal import Moondream2Backend, VisionService
+
+    vcfg = vision_config(config)
+
+    def _make_vision_backend():
+        return Moondream2Backend(
+            text_model_path=vcfg["text_model_path"],
+            mmproj_path=vcfg["mmproj_path"],
+            n_ctx=vcfg["n_ctx"],
+            n_threads=vcfg.get("n_threads") or None,
+            n_gpu_layers=0,
+        )
+
+    vision_service = VisionService(
+        _make_vision_backend, enabled=bool(vcfg.get("enabled", True))
+    )
+
     # Startup recovery — detects crashes, repairs orphan observations
     try:
         recovery = CrashRecovery(memory, backend, config)
@@ -83,7 +102,13 @@ def main() -> int:
     _sigint_tick.timeout.connect(lambda: None)
     # ----------------------------------------------------------------------
 
-    window = MainWindow(backend, memory, config, reporter=reporter)
+    window = MainWindow(
+        backend,
+        memory,
+        config,
+        reporter=reporter,
+        vision_service=vision_service,
+    )
     window.show()
 
     try:

@@ -350,6 +350,7 @@ def delete_cloud_key(env_key: str) -> bool:
     except Exception:
         return False
 
+
 def save_cloud_settings(
     config_path: str, enabled: bool, fallback_to_local: bool
 ) -> bool:
@@ -374,3 +375,18 @@ def save_cloud_settings(
         return True
     except Exception:
         return False
+
+
+def vision_config(config: dict) -> dict:
+    """Return the vision block with safe defaults."""
+    defaults = {
+        "enabled": True,
+        "text_model_path": ("models/moondream2/moondream2-text-model-f16.gguf"),
+        "mmproj_path": "models/moondream2/moondream2-mmproj-f16.gguf",
+        "n_threads": 4,
+        "n_ctx": 2048,
+        "unload_after_sec": 300,
+        "prompt_cooldown_min": 15,
+        "require_thin_text": True,
+    }
+    return {**defaults, **(config.get("vision") or {})}
