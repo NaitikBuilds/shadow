@@ -33,10 +33,22 @@ jobs:
       - name: Run fast tests
         run: pytest -m "not slow and not hardware and not injection" -v
 
+      - name: Show logs directory (only on failure)
+        if: failure()
+        shell: powershell
+        run: |
+          if (Test-Path -Path logs) {
+            Write-Host "logs directory contents:"
+            Get-ChildItem -Path logs -Recurse | Format-Table -AutoSize
+          } else {
+            Write-Host "logs directory not present"
+          }  
+
       - name: Upload error logs on failure
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: error-logs
-          path: logs/
+          path: logs/**
           if-no-files-found: ignore
