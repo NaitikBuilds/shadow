@@ -41,6 +41,7 @@ NETWORK_SUBMODULES = {
 
 WHITELIST = {
     "models/manager.py",
+    "hal/cloud_backend.py",
 }
 
 WHITELIST_PREFIXES = ("cloud/",)

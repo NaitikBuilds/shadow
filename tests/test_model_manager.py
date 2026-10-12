@@ -46,8 +46,10 @@ def test_registry_vision_is_optional():
 
 
 def test_path_for(manager):
+    from shadow.models import MODELS
+
     p = manager.path_for("chat")
-    assert p.name == "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    assert p.name == MODELS["chat"].filename
     assert str(p).startswith(str(manager.cache_dir))
 
 
