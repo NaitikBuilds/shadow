@@ -124,6 +124,30 @@ class ProviderPool(InferenceBackend):
             "ProviderPool does not embed. Use the local ONNX embedder."
         )
 
+    def understand_image(
+        self,
+        image_bytes: bytes,
+        task: str = "caption",
+        prompt: str = "",
+    ) -> str:
+        """Delegate vision to the local fallback.
+
+        Cloud providers may eventually support vision. For now, vision
+        is always local.
+        """
+        if self._local_fallback is not None:
+            return self._local_fallback.understand_image(
+                image_bytes, task=task, prompt=prompt
+            )
+        raise NotImplementedError(
+            "ProviderPool has no vision support and no local fallback."
+        )
+
+    def supports_vision(self) -> bool:
+        if self._local_fallback is not None:
+            return self._local_fallback.supports_vision()
+        return False
+
     @property
     def info(self) -> dict:
         available = [s for s in self._states if s.is_available]

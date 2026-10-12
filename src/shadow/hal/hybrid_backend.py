@@ -56,6 +56,22 @@ class HybridBackend(InferenceBackend):
     def embed(self, text: str) -> list[float]:
         return self.local.embed(text)
 
+    def understand_image(
+        self,
+        image_bytes: bytes,
+        task: str = "caption",
+        prompt: str = "",
+    ) -> str:
+        """Vision always uses the local backend.
+
+        Cloud vision is not in v1.0. When it arrives, this method
+        gains a routing branch identical to generate_stream.
+        """
+        return self.local.understand_image(image_bytes, task=task, prompt=prompt)
+
+    def supports_vision(self) -> bool:
+        return self.local.supports_vision()
+
     @property
     def info(self) -> dict:
         local_info = self.local.info if hasattr(self.local, "info") else {}

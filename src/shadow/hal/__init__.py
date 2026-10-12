@@ -1,6 +1,13 @@
 """SHADOW HAL — hardware abstraction layer."""
 
-from .base import InferenceBackend
+from .base import (
+    TASK_CAPTION,
+    TASK_DETAILED_CAPTION,
+    TASK_OCR,
+    TASK_QUERY,
+    VALID_TASKS,
+    InferenceBackend,
+)
 from .cloud_backend import (
     AuthError,
     CloudBackend,
@@ -30,4 +37,9 @@ __all__ = [
     "ProviderState",
     "RateLimitError",
     "ServerError",
+    "TASK_CAPTION",
+    "TASK_DETAILED_CAPTION",
+    "TASK_OCR",
+    "TASK_QUERY",
+    "VALID_TASKS",
 ]
