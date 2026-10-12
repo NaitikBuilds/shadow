@@ -114,7 +114,7 @@ class CloudBackend(InferenceBackend):
         while attempt <= self.max_retries:
             try:
                 with self._client.stream(
-                    "POST", "/chat/completions", json=payload
+                    "POST", "chat/completions", json=payload
                 ) as response:
                     self._raise_for_status(response)
                     for chunk in self._iter_sse(response):
@@ -162,7 +162,7 @@ class CloudBackend(InferenceBackend):
             "stream": False,
         }
         try:
-            response = self._client.post("/chat/completions", json=payload)
+            response = self._client.post("chat/completions", json=payload)
             self._raise_for_status(response)
             return True, "ok"
         except CloudError as exc:
@@ -179,8 +179,13 @@ class CloudBackend(InferenceBackend):
     # ---------- internals ----------
 
     def _make_client(self) -> httpx.Client:
+        # httpx uses RFC 3986 URL joining. If base_url doesn't end with
+        # a slash, the last path segment is replaced when joining a
+        # relative path. Normalize to guarantee `/v1/chat/completions`
+        # rather than `/chat/completions`.
+        base = self.provider.base_url.rstrip("/") + "/"
         return httpx.Client(
-            base_url=self.provider.base_url,
+            base_url=base,
             headers={
                 "Authorization": f"Bearer {self.provider.api_key}",
                 "Content-Type": "application/json",

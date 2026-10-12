@@ -179,7 +179,7 @@ cloud:
   providers:
     - name: "groq"
       enabled: true
-      model: "llama-3.3-70b-versatile"
+      model: "openai/gpt-oss-120b"
       env_key: "SHADOW_GROQ_KEY"
       base_url: "https://api.groq.com/openai/v1"
       priority: 1

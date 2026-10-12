@@ -11,6 +11,8 @@ from .cloud_backend import (
     ServerError,
 )
 from .cpu_backend import CpuBackend
+from .health import HealthMonitor
+from .hybrid_backend import HybridBackend
 from .provider_pool import AllProvidersFailed, ProviderPool, ProviderState
 
 __all__ = [
@@ -19,6 +21,8 @@ __all__ = [
     "CloudBackend",
     "CloudError",
     "CpuBackend",
+    "HealthMonitor",
+    "HybridBackend",
     "InferenceBackend",
     "NetworkError",
     "ProviderConfig",

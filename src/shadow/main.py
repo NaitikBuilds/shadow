@@ -27,7 +27,7 @@ def main() -> int:
     reporter = ErrorReporter(memory=memory)
     install_exception_hook(reporter)
 
-    backend = CpuBackend(
+    local_backend = CpuBackend(
         model_path=config["model"]["path"],
         n_ctx=config["model"]["n_ctx"],
         n_threads=config["model"].get("n_threads") or None,
@@ -35,6 +35,20 @@ def main() -> int:
         embedder_model=config["model"].get("embedder_model"),
         embedder_tokenizer=config["model"].get("embedder_tokenizer"),
     )
+
+    # Optional cloud layer — falls back to local automatically.
+    from shadow.config import build_provider_pool, cloud_enabled
+    from shadow.hal import HealthMonitor, HybridBackend
+
+    backend = local_backend
+    if cloud_enabled(config):
+        pool = build_provider_pool(config, local_backend=local_backend)
+        if pool is not None:
+            backend = HybridBackend(
+                cloud=pool,
+                local=local_backend,
+                health=HealthMonitor(),
+            )
 
     # Startup recovery — detects crashes, repairs orphan observations
     try:
