@@ -32,10 +32,11 @@ from shadow.agent import (
     SessionMemory,
     StuckDetector,
     TaintPropagator,
+    VisionOfferPolicy,
 )
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
-from shadow.perception import ObservationWorker
+from shadow.perception import ObservationWorker, ScreenVisionSource
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
@@ -45,6 +46,7 @@ from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
 from shadow.ui.privacy_dashboard import PrivacyDashboard
 from shadow.ui.search_panel import SearchPanel
+from shadow.ui.vision_popup import VisionPopup
 
 
 class InferenceWorker(QThread):
@@ -86,7 +88,6 @@ class MainWindow(QMainWindow):
         self.backend = backend
         self.memory = memory
         self.config = config
-        self.vision_service = vision_service
         self.recovery_engine = RecoveryEngine(self.memory)
         self.focus_shield = FocusShield(self.memory)
         self.forecasting_engine = ForecastingEngine(self.memory)
@@ -105,6 +106,22 @@ class MainWindow(QMainWindow):
         self.feedback = FeedbackStore(self.memory)
         self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
+        self.vision_service = vision_service
+        vcfg = self.config.get("vision") or {}
+        self.vision_offer_policy = VisionOfferPolicy(
+            cooldown_min=vcfg.get("prompt_cooldown_min", 15),
+            enabled=bool(vcfg.get("enabled", True)) and vision_service is not None,
+        )
+        self.vision_popup = VisionPopup(self)
+        self.vision_popup.choice_made.connect(self._on_vision_choice)
+        self._pending_vision_offer: dict = {}
+
+        self.screen_vision = None
+        if vision_service is not None:
+            self.screen_vision = ScreenVisionSource(
+                vision_service,
+                classifier=getattr(self, "classifier", None),
+            )
         self.prompt_builder = PromptBuilder()
         self._full_shutdown = False
         self.retriever = ShadowRetriever(self.memory, self.backend)
@@ -255,6 +272,9 @@ class MainWindow(QMainWindow):
 
         cloud_action = settings_menu.addAction("Cloud LLM…")
         cloud_action.triggered.connect(self.open_cloud_panel)
+
+        vision_action = settings_menu.addAction("Offer vision now")
+        vision_action.triggered.connect(self._run_vision_now)
 
         dnd_action = settings_menu.addAction("Do Not Disturb")
         dnd_action.setCheckable(True)
@@ -418,6 +438,7 @@ class MainWindow(QMainWindow):
         self.observer.skipped.connect(self._on_observer_skipped)
         self.observer.error.connect(self._on_observer_error)
         self.observer.start()
+        self.observer.visual_content_maybe.connect(self._on_visual_content_maybe)
         self.observer_status.setText("Observer: starting…")
         self.memory.log_activity("observer_start", "observer loop started")
 
@@ -477,6 +498,54 @@ class MainWindow(QMainWindow):
             pass
         try:
             self.memory.log_activity("quick_capture", path)
+        except Exception:
+            pass
+
+    def _on_visual_content_maybe(self, payload: dict):
+        if self.screen_vision is None:
+            return
+        if not self.vision_offer_policy.should_offer(
+            payload.get("process", ""),
+            payload.get("category", ""),
+        ):
+            return
+        self._pending_vision_offer = payload
+        self.vision_popup.show_for(payload)
+
+    def _on_vision_choice(self, choice: str):
+        process = self._pending_vision_offer.get("process", "")
+        try:
+            self.vision_offer_policy.record(process, choice)
+        except Exception:
+            pass
+
+        if choice == "yes":
+            self._run_vision_now()
+
+    def _run_vision_now(self):
+        if self.screen_vision is None:
+            self.output.append(
+                "<i>Vision is not available. Enable it in Settings → Vision.</i>"
+            )
+            return
+        self.output.append("<i>Analyzing current window with local vision…</i>")
+        try:
+            result = self.screen_vision.sample(task="caption")
+        except Exception as exc:  # noqa: BLE001
+            self.output.append(f"<b style='color:red'>Vision error:</b> {exc}")
+            return
+        if not result:
+            self.output.append(
+                "<i>Vision returned no result "
+                "(sensitive window, empty content, or model unavailable).</i>"
+            )
+            return
+        self.output.append(f"<b>Vision:</b> {result['text']}")
+        try:
+            self.memory.log_activity(
+                "vision_caption",
+                f"{result.get('process', '')}: {result['text'][:80]}",
+            )
         except Exception:
             pass
 

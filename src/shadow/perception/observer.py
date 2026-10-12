@@ -40,6 +40,7 @@ class ObservationWorker(QThread):
     observation = Signal(str, str)
     skipped = Signal(str, str)
     error = Signal(str)
+    visual_content_maybe = Signal(dict)
 
     def __init__(self, memory, backend, config):
         super().__init__()
@@ -161,6 +162,44 @@ class ObservationWorker(QThread):
                 self.msleep(100)
                 slept += 0.1
 
+    def _maybe_emit_visual_content(self, total_chars: int) -> None:
+        """Emit visual_content_maybe if the tick looks visual-only."""
+        from shadow.agent.vision_offer import THIN_TEXT_THRESHOLD_CHARS
+
+        if total_chars >= THIN_TEXT_THRESHOLD_CHARS:
+            return
+
+        window = self._active_window_for_offer()
+        if not window:
+            return
+
+        try:
+            profile = self.classifier.classify(
+                process=window.get("process", ""),
+                title=window.get("title", ""),
+            )
+        except Exception:
+            return
+        if profile.is_self:
+            return
+
+        self.visual_content_maybe.emit(
+            {
+                "process": window.get("process", ""),
+                "title": window.get("title", ""),
+                "category": profile.category.value,
+            }
+        )
+
+    @staticmethod
+    def _active_window_for_offer() -> dict | None:
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+
+            return ActiveWindowSource().sample()
+        except Exception:
+            return None
+
     # ---------- internals ----------
 
     def _do_tick(self) -> None:
@@ -177,6 +216,7 @@ class ObservationWorker(QThread):
         screen_changed = self.change_detector.has_changed()
 
         uia_thin = False
+        total_chars = 0
 
         for source in self.sources:
             if not self.memory.get_consent(source.channel):
@@ -200,6 +240,7 @@ class ObservationWorker(QThread):
                 if source.name == "screen_uia":
                     uia_thin = True
                 continue
+            total_chars += len(content)
 
             if source.name == "screen_uia" and len(content) < 200:
                 uia_thin = True
@@ -234,6 +275,8 @@ class ObservationWorker(QThread):
 
             preview = content[:120].replace("\n", " ")
             self.observation.emit(source.name, preview)
+            if screen_changed:
+                self._maybe_emit_visual_content(total_chars)
 
     def _content_from(self, source_name: str, payload: dict) -> str:
         # Never observe ourselves.

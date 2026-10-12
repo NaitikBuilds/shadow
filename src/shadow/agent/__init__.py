@@ -18,6 +18,11 @@ from .sessions import Session, SessionMemory
 from .stuck import StuckDetector
 from .style import StyleMirrorEngine, StyleResult
 from .taint import Taint, TaintedValue, TaintPropagator, max_taint
+from .vision_offer import (
+    THIN_TEXT_THRESHOLD_CHARS,
+    VISUAL_CATEGORIES,
+    VisionOfferPolicy,
+)
 
 __all__ = [
     "AmbientTask",
@@ -46,4 +51,7 @@ __all__ = [
     "TaintPropagator",
     "max_taint",
     "StuckDetector",
+    "THIN_TEXT_THRESHOLD_CHARS",
+    "VISUAL_CATEGORIES",
+    "VisionOfferPolicy",
 ]
