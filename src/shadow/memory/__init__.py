@@ -1,6 +1,7 @@
 """SHADOW memory layer — storage, retrieval, entities, retention, recovery."""
 
 from .entities import EntityExtractor, GraphBuilder
+from .images import IMAGE_SOURCES, ImageObservation, ImageObservationStore
 from .recovery import CrashRecovery
 from .redaction import Redactor, redact
 from .retention import RetentionPolicy
@@ -16,4 +17,7 @@ __all__ = [
     "redact",
     "RetentionPolicy",
     "CrashRecovery",
+    "IMAGE_SOURCES",
+    "ImageObservation",
+    "ImageObservationStore",
 ]

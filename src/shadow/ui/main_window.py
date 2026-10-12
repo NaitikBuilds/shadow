@@ -566,7 +566,22 @@ class MainWindow(QMainWindow):
                 "(sensitive window, empty content, or model unavailable).</i>"
             )
             return
+
         self.output.append(f"<b>Vision:</b> {result['text']}")
+
+        try:
+            from shadow.memory import ImageObservationStore
+
+            store = ImageObservationStore(self.memory)
+            store.record_screen_vision(
+                text=result.get("text", ""),
+                window_title=result.get("window_title", ""),
+                process=result.get("process", ""),
+                task=result.get("task", "caption"),
+            )
+        except Exception:
+            pass
+
         try:
             self.memory.log_activity(
                 "vision_caption",
