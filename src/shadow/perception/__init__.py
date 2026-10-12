@@ -11,6 +11,7 @@ from .clipboard import ClipboardSource
 from .documents import DocumentSource
 from .hotkeys import VisionHotkeys
 from .identifiers import IdentifierExtractor, Identifiers
+from .image_files import ImageFileSource
 from .interactive import (
     ElementRole,
     InteractiveElement,
@@ -87,4 +88,5 @@ __all__ = [
     "ReadingPositionTracker",
     "ScreenVisionSource",
     "VisionHotkeys",
+    "ImageFileSource",
 ]

@@ -453,7 +453,12 @@ class MainWindow(QMainWindow):
         if not pcfg.get("enabled", True):
             self.observer_status.setText("Observer: disabled in config")
             return
-        self.observer = ObservationWorker(self.memory, self.backend, self.config)
+        self.observer = ObservationWorker(
+            self.memory,
+            self.backend,
+            self.config,
+            vision_service=self.vision_service,
+        )
         self.observer.tick.connect(self._on_observer_tick)
         self.observer.observation.connect(self._on_observer_observation)
         self.observer.skipped.connect(self._on_observer_skipped)

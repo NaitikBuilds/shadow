@@ -6,11 +6,13 @@ consent:
   typing_dynamics: false
   webcam_posture: false
   clipboard: false
+
 observation:
   indicator_enabled: true
   indicator_position: topbar
   default_mode: balanced
   retention_days: 90
+
 perception:
   enabled: true
   tick_interval_sec: 30
@@ -32,16 +34,32 @@ perception:
   identifiers:
     extract_urls: true
     extract_paths: true
+
+  image_files:
+    watch_folders:
+      - "~/Pictures"
+      - "~/Documents"
+      - "~/Downloads"
+    extensions:
+      - ".png"
+      - ".jpg"
+      - ".jpeg"
+      - ".webp"
+    max_file_size_mb: 15
+    image_max_side: 1024  
+
   tabs:
     enabled: true
     stale_hours: 6
     retention_days: 7
     related_min_overlap: 2
+
   change_detection:
     enabled: true
     threshold: 5
     hash_size: 8
     min_interval_ms: 500
+
   cadence:
     enabled: true
     min_interval_sec: 5
@@ -49,14 +67,18 @@ perception:
     idle_interval_sec: 30
     accelerate_multiplier: 0.5
     backoff_multiplier: 1.5
+
   reading_position:
     enabled: true
     min_change_pct: 5
     retention_days: 30
+
   window_classifier:
     custom_map: {}
+
   interactive:
     max_elements: 100
+
   sources:
     active_window: true
     screen_ocr: true
@@ -65,6 +87,8 @@ perception:
     calendar: true
     clipboard: true
     screen_uia: true
+    image_files: true
+
   budget:
     enabled: true
     active_multiplier: 0.7
@@ -74,11 +98,14 @@ perception:
     low_battery_multiplier: 2.0
     min_interval_sec: 5
     max_interval_sec: 180
+
   max_title_length: 200
   min_title_length: 3
+
   typing:
     pause_threshold_sec: 2.0
     min_keystrokes: 10
+
   documents:
     watch_folders:
     - ~/Documents
@@ -91,6 +118,7 @@ perception:
     - .docx
     max_file_size_mb: 5
     max_chars: 4000
+
   calendar:
     watch_folders:
     - ~/Documents
@@ -98,6 +126,7 @@ perception:
     - ~/OneDrive/Documents
     lookback_days: 1
     lookahead_days: 14
+
 model:
   path: models/Llama-3.2-1B-Instruct-Q4_K_M.gguf
   n_ctx: 2048
@@ -108,13 +137,16 @@ model:
   max_tokens: 512
   embedder_model: models/minilm/model.onnx
   embedder_tokenizer: models/minilm/tokenizer.json
+
 memory:
   db_path: data/shadow.db
   vector_dim: 384
+
 models:
   cache_dir: models
   verify_on_load: true
   auto_download_optional: false
+
 retention:
   observations_days: 0
   low_value_days: 7
@@ -122,10 +154,12 @@ retention:
   error_logs_days: 30
   orphan_observation_hours: 24
   prune_interval_hours: 24
+
 capture:
   enabled: true
   hotkey: <ctrl>+<shift>+s
   output_dir: ~/SHADOW_workspace/captures
+
 agent:
   stuck:
     enabled: true
@@ -133,10 +167,12 @@ agent:
     alternation_minutes: 15
     alternation_count: 8
     error_lookback_minutes: 5
+
 redaction:
   enabled: true
   redact_emails: false
   placeholder: '[REDACTED]'
+
 cloud:
   enabled: true
   fallback_to_local: true

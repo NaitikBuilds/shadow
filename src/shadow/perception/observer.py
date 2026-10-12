@@ -20,6 +20,7 @@ from shadow.perception.calendar_winrt import WindowsCalendarSource
 from shadow.perception.change_detector import ChangeDetector
 from shadow.perception.clipboard import ClipboardSource
 from shadow.perception.documents import DocumentSource
+from shadow.perception.image_files import ImageFileSource
 from shadow.perception.screen_ocr import ScreenOCRSource
 from shadow.perception.screen_uia import ScreenUIASource
 from shadow.perception.typing import TypingDynamicsSource
@@ -42,11 +43,12 @@ class ObservationWorker(QThread):
     error = Signal(str)
     visual_content_maybe = Signal(dict)
 
-    def __init__(self, memory, backend, config):
+    def __init__(self, memory, backend, config, vision_service=None):
         super().__init__()
         self.memory = memory
         self.backend = backend
         self.config = config
+        self.vision_service = vision_service
         self.pcfg = perception_config(config)
         ccfg = change_detection_config(config)
         self.change_detector = ChangeDetector(
@@ -91,6 +93,20 @@ class ObservationWorker(QThread):
                     or [".txt", ".md", ".pdf", ".docx"],
                     max_file_size_mb=dcfg.get("max_file_size_mb", 5),
                     max_chars=dcfg.get("max_chars", 4000),
+                )
+            )
+
+        if source_enabled(config, "image_files") and vision_service is not None:
+            from shadow.config import image_files_config
+
+            icfg = image_files_config(config)
+            self.sources.append(
+                ImageFileSource(
+                    vision_service=vision_service,
+                    watch_folders=icfg.get("watch_folders") or [],
+                    extensions=icfg.get("extensions") or [],
+                    max_file_size_mb=icfg.get("max_file_size_mb", 15),
+                    image_max_side=icfg.get("image_max_side", 1024),
                 )
             )
 
@@ -318,6 +334,12 @@ class ObservationWorker(QThread):
                 return ""
             preview = text[:500]
             return f"Clipboard ({payload.get('chars', 0)} chars):\n{preview}"
+        if source_name == "image_file":
+            name = (payload.get("name") or "").strip()
+            caption = (payload.get("caption") or "").strip()
+            if not name or not caption:
+                return ""
+            return f"Image: {name}\n{caption}"
         return ""
 
     def _is_duplicate(self, source_name: str, content: str) -> bool:

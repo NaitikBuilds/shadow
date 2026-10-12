@@ -37,6 +37,7 @@ def perception_config(config: dict) -> dict:
             "screen_uia": True,
             "typing_dynamics": True,
             "document_watch": True,
+            "image_files": True,
             "calendar": True,
             "clipboard": True,
         },
@@ -392,3 +393,15 @@ def vision_config(config: dict) -> dict:
         "image_max_bytes": 10 * 1024 * 1024,
     }
     return {**defaults, **(config.get("vision") or {})}
+
+
+def image_files_config(config: dict) -> dict:
+    """Return the perception.image_files block with safe defaults."""
+    defaults = {
+        "watch_folders": ["~/Pictures", "~/Documents", "~/Downloads"],
+        "extensions": [".png", ".jpg", ".jpeg", ".webp"],
+        "max_file_size_mb": 15,
+        "image_max_side": 1024,
+    }
+    user = (config.get("perception") or {}).get("image_files") or {}
+    return {**defaults, **user}
