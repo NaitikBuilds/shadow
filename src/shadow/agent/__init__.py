@@ -18,6 +18,11 @@ from .sessions import Session, SessionMemory
 from .stuck import StuckDetector
 from .style import StyleMirrorEngine, StyleResult
 from .taint import Taint, TaintedValue, TaintPropagator, max_taint
+from .vision_intents import (
+    VisionIntent,
+    build_vision_context,
+    detect_intent,
+)
 from .vision_offer import (
     THIN_TEXT_THRESHOLD_CHARS,
     VISUAL_CATEGORIES,
@@ -54,4 +59,7 @@ __all__ = [
     "THIN_TEXT_THRESHOLD_CHARS",
     "VISUAL_CATEGORIES",
     "VisionOfferPolicy",
+    "VisionIntent",
+    "build_vision_context",
+    "detect_intent",
 ]

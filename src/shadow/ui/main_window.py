@@ -33,6 +33,8 @@ from shadow.agent import (
     StuckDetector,
     TaintPropagator,
     VisionOfferPolicy,
+    build_vision_context,
+    detect_intent,
 )
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
@@ -617,7 +619,12 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        augmented = self._build_prompt_with_context(prompt)
+        vision_augmented, vision_fired = self._maybe_augment_with_vision(prompt)
+        if vision_fired:
+            augmented = vision_augmented
+            self.output.append("<i>Looking at your screen…</i>")
+        else:
+            augmented = self._build_prompt_with_context(prompt)
 
         self.output.append(f"<b>You:</b> {prompt}")
         self.output.append("<b>Shadow:</b> ")
@@ -695,6 +702,42 @@ class MainWindow(QMainWindow):
             observations=observations,
             extra_context=combined_extra,
         )
+
+    def _maybe_augment_with_vision(self, user_prompt: str) -> tuple[str, bool]:
+        """Detect visual intent and run vision if matched.
+
+        Returns (augmented_prompt, vision_fired).
+        """
+        intent = detect_intent(user_prompt)
+        if intent is None:
+            return user_prompt, False
+
+        if self.screen_vision is None:
+            return user_prompt, False
+
+        try:
+            result = self.screen_vision.sample(task=intent.task, prompt=intent.prompt)
+        except Exception:
+            result = None
+
+        # Persist if we got a result (best-effort)
+        if result is not None:
+            try:
+                from shadow.memory import ImageObservationStore
+
+                store = ImageObservationStore(self.memory)
+                store.record_screen_vision(
+                    text=result.get("text", ""),
+                    window_title=result.get("window_title", ""),
+                    process=result.get("process", ""),
+                    task=result.get("task", "caption"),
+                )
+            except Exception:
+                pass
+
+        context = build_vision_context(intent, result)
+        augmented = f"{context}\n\nUser question: {user_prompt}"
+        return augmented, True
 
     # ---------- graceful shutdown ----------
 
