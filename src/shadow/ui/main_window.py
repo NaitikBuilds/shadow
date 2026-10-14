@@ -33,8 +33,10 @@ from shadow.agent import (
     StuckDetector,
     TaintPropagator,
     VisionOfferPolicy,
+    build_combined_context,
     build_vision_context,
     detect_intent,
+    wants_memory_context,
 )
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory.retriever import ShadowRetriever
@@ -703,6 +705,44 @@ class MainWindow(QMainWindow):
             extra_context=combined_extra,
         )
 
+    def _build_memory_context(self, user_prompt: str) -> str:
+        """Build a memory-only context block (no vision, no user question)."""
+        try:
+            observations = self.retriever.semantic(user_prompt, k=3)
+        except Exception:
+            observations = []
+
+        lines: list[str] = []
+        for obs in observations:
+            content = (obs.get("content") or "").strip()
+            if len(content) < 25:
+                continue
+            lines.append(
+                f"- [{obs.get('timestamp', '')}] "
+                f"({obs.get('source', '')}) {content[:150]}"
+            )
+
+        # Add temporal results if a time keyword is present.
+        for window in ("last month", "yesterday", "last week", "today"):
+            if window in user_prompt.lower():
+                try:
+                    temporal = self.retriever.temporal(window)
+                except Exception:
+                    temporal = []
+                for obs in temporal[:5]:
+                    content = (obs.get("content") or "").strip()
+                    if len(content) < 25:
+                        continue
+                    lines.append(
+                        f"- [{obs.get('timestamp', '')}] "
+                        f"({obs.get('source', '')}) {content[:150]}"
+                    )
+                break
+
+        if not lines:
+            return ""
+        return "Relevant past observations:\n" + "\n".join(lines)
+
     def _maybe_augment_with_vision(self, user_prompt: str) -> tuple[str, bool]:
         """Detect visual intent and run vision if matched.
 
@@ -735,8 +775,18 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-        context = build_vision_context(intent, result)
-        augmented = f"{context}\n\nUser question: {user_prompt}"
+        vision_context = build_vision_context(intent, result)
+
+        # If the query also asks about past context, merge memory retrieval.
+        memory_context = ""
+        if wants_memory_context(user_prompt):
+            try:
+                memory_context = self._build_memory_context(user_prompt)
+            except Exception:
+                memory_context = ""
+
+        combined = build_combined_context(vision_context, memory_context)
+        augmented = f"{combined}\n\nUser question: {user_prompt}"
         return augmented, True
 
     # ---------- graceful shutdown ----------

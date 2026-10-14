@@ -21,7 +21,9 @@ from .taint import Taint, TaintedValue, TaintPropagator, max_taint
 from .vision_intents import (
     VisionIntent,
     build_vision_context,
+    build_combined_context,
     detect_intent,
+    wants_memory_context,
 )
 from .vision_offer import (
     THIN_TEXT_THRESHOLD_CHARS,
@@ -61,5 +63,7 @@ __all__ = [
     "VisionOfferPolicy",
     "VisionIntent",
     "build_vision_context",
+    "build_combined_context",
     "detect_intent",
+    "wants_memory_context",
 ]

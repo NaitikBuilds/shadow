@@ -129,3 +129,41 @@ def build_vision_context(intent: VisionIntent, vision_result: dict | None) -> st
     lines.append("")
     lines.append(text or "(empty)")
     return "\n".join(lines)
+
+
+# Keywords that indicate the query also wants memory context.
+_MEMORY_KEYWORDS = (
+    "yesterday",
+    "last week",
+    "last month",
+    "earlier",
+    "before",
+    "remind",
+    "what did i",
+    "previously",
+    "related to",
+    "how does this",
+    "how does that",
+    "connection",
+)
+
+
+def wants_memory_context(query: str) -> bool:
+    """Return True if the query also asks about past context."""
+    if not query:
+        return False
+    lower = query.lower()
+    return any(kw in lower for kw in _MEMORY_KEYWORDS)
+
+
+def build_combined_context(
+    vision_context: str,
+    memory_context: str,
+) -> str:
+    """Merge vision and memory context into one block."""
+    parts: list[str] = []
+    if vision_context:
+        parts.append(vision_context)
+    if memory_context:
+        parts.append(memory_context)
+    return "\n\n".join(parts).strip()
