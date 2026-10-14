@@ -50,6 +50,7 @@ from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
 from shadow.ui.privacy_dashboard import PrivacyDashboard
 from shadow.ui.search_panel import SearchPanel
+from shadow.ui.vision_consent import VisionConsent, VisionConsentDialog
 from shadow.ui.vision_popup import VisionPopup
 
 
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
             cooldown_min=vcfg.get("prompt_cooldown_min", 15),
             enabled=bool(vcfg.get("enabled", True)) and vision_service is not None,
         )
+        self.vision_consent = VisionConsent(self.memory)
         self.vision_popup = VisionPopup(self)
         self.vision_popup.choice_made.connect(self._on_vision_choice)
         self._pending_vision_offer: dict = {}
@@ -270,6 +272,29 @@ class MainWindow(QMainWindow):
             "<i>Region capture is coming soon. "
             "Try Ctrl+Shift+V to caption the active window.</i>"
         )
+
+    def _ensure_vision_consent(self) -> bool:
+        """Return True if the user has accepted vision consent.
+
+        Shows the first-use dialog if not yet accepted.
+        """
+        if self.vision_consent is None:
+            return True
+        if self.vision_consent.is_accepted():
+            return True
+
+        dlg = VisionConsentDialog(self)
+        dlg.exec()
+        if not dlg.accepted_choice:
+            self.output.append("<i>Vision not enabled. You can try again later.</i>")
+            return False
+
+        self.vision_consent.accept()
+        try:
+            self.memory.log_activity("vision_consent", "first-use consent accepted")
+        except Exception:
+            pass
+        return True
 
     # ---------- menu (NEW in Commit 3) ----------
 
@@ -558,12 +583,16 @@ class MainWindow(QMainWindow):
                 "<i>Vision is not available. Enable it in Settings → Vision.</i>"
             )
             return
+
+        if not self._ensure_vision_consent():
+            return
+
         self.output.append("<i>Analyzing current window with local vision…</i>")
+        self.indicator.set_vision_active(True)
         try:
             result = self.screen_vision.sample(task="caption")
-        except Exception as exc:  # noqa: BLE001
-            self.output.append(f"<b style='color:red'>Vision error:</b> {exc}")
-            return
+        finally:
+            self.indicator.set_vision_active(False)
         if not result:
             self.output.append(
                 "<i>Vision returned no result "
@@ -755,10 +784,16 @@ class MainWindow(QMainWindow):
         if self.screen_vision is None:
             return user_prompt, False
 
+        if not self._ensure_vision_consent():
+            return user_prompt, False
+
+        self.indicator.set_vision_active(True)
         try:
             result = self.screen_vision.sample(task=intent.task, prompt=intent.prompt)
         except Exception:
             result = None
+        finally:
+            self.indicator.set_vision_active(False)
 
         # Persist if we got a result (best-effort)
         if result is not None:
