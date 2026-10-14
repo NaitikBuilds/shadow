@@ -7,6 +7,7 @@ from .redaction import Redactor, redact
 from .retention import RetentionPolicy
 from .retriever import ShadowRetriever
 from .store import MemoryStore
+from .vision_exclusions import VisionExclusionStore
 
 __all__ = [
     "MemoryStore",
@@ -20,4 +21,5 @@ __all__ = [
     "IMAGE_SOURCES",
     "ImageObservation",
     "ImageObservationStore",
+    "VisionExclusionStore",
 ]

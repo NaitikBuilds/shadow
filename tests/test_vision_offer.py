@@ -1,5 +1,3 @@
-
-
 from shadow.agent import (
     THIN_TEXT_THRESHOLD_CHARS,
     VISUAL_CATEGORIES,
@@ -61,11 +59,18 @@ def test_record_not_now_sets_cooldown():
     assert policy.should_offer("chrome.exe", "browser") is False
 
 
-def test_record_never_excludes_permanently():
-    policy = VisionOfferPolicy(cooldown_min=15)
-    policy.record("chrome.exe", "never")
-    assert policy.should_offer("chrome.exe", "browser") is False
-    assert policy.is_excluded("chrome.exe") is True
+def test_record_never_excludes_when_store_attached(tmp_path):
+    from shadow.memory import MemoryStore, VisionExclusionStore
+
+    store = MemoryStore(str(tmp_path / "excl.db"))
+    try:
+        exclusions = VisionExclusionStore(store)
+        policy = VisionOfferPolicy(cooldown_min=15, exclusions=exclusions)
+        policy.record("chrome.exe", "never")
+        assert policy.should_offer("chrome.exe", "browser") is False
+        assert policy.is_excluded("chrome.exe") is True
+    finally:
+        store.close()
 
 
 def test_normalization_case_insensitive():
@@ -80,22 +85,36 @@ def test_normalization_strips_exe():
     assert policy.is_excluded("code") is True
 
 
-def test_excluded_process_list():
-    policy = VisionOfferPolicy()
-    policy.record("chrome.exe", "never")
-    policy.record("firefox.exe", "never")
-    exclusions = policy.excluded_processes()
-    assert "chrome" in exclusions
-    assert "firefox" in exclusions
-    assert len(exclusions) == 2
+def test_excluded_process_list(tmp_path):
+    from shadow.memory import MemoryStore, VisionExclusionStore
+
+    store = MemoryStore(str(tmp_path / "excl.db"))
+    try:
+        exclusions = VisionExclusionStore(store)
+        policy = VisionOfferPolicy(exclusions=exclusions)
+        policy.record("chrome.exe", "never")
+        policy.record("firefox.exe", "never")
+        excluded = policy.excluded_processes()
+        assert "chrome" in excluded
+        assert "firefox" in excluded
+        assert len(excluded) == 2
+    finally:
+        store.close()
 
 
-def test_clear_exclusions():
-    policy = VisionOfferPolicy()
-    policy.record("chrome.exe", "never")
-    policy.clear_exclusions()
-    assert policy.excluded_processes() == set()
-    assert policy.should_offer("chrome.exe", "browser") is True
+def test_clear_exclusions(tmp_path):
+    from shadow.memory import MemoryStore, VisionExclusionStore
+
+    store = MemoryStore(str(tmp_path / "excl.db"))
+    try:
+        exclusions = VisionExclusionStore(store)
+        policy = VisionOfferPolicy(exclusions=exclusions)
+        policy.record("chrome.exe", "never")
+        policy.clear_exclusions()
+        assert policy.excluded_processes() == set()
+        assert policy.should_offer("chrome.exe", "browser") is True
+    finally:
+        store.close()
 
 
 def test_seconds_until_ready_fresh_process():
@@ -111,7 +130,14 @@ def test_seconds_until_ready_after_choice():
     assert 0 < remaining <= 15 * 60
 
 
-def test_seconds_until_ready_excluded_returns_negative():
-    policy = VisionOfferPolicy()
-    policy.record("chrome.exe", "never")
-    assert policy.seconds_until_ready("chrome.exe") == -1
+def test_seconds_until_ready_excluded_returns_negative(tmp_path):
+    from shadow.memory import MemoryStore, VisionExclusionStore
+
+    store = MemoryStore(str(tmp_path / "excl.db"))
+    try:
+        exclusions = VisionExclusionStore(store)
+        policy = VisionOfferPolicy(exclusions=exclusions)
+        policy.record("chrome.exe", "never")
+        assert policy.seconds_until_ready("chrome.exe") == -1
+    finally:
+        store.close()

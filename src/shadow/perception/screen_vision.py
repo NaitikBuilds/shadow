@@ -68,12 +68,14 @@ class ScreenVisionSource(PerceptionSource):
         capture_fn: Callable[[tuple[int, int, int, int]], Any] | None = None,
         image_max_side: int = DEFAULT_IMAGE_MAX_SIDE,
         image_max_bytes: int = DEFAULT_IMAGE_MAX_BYTES,
+        exclusions=None,
     ):
         self.vision_service = vision_service
         self.classifier = classifier or WindowClassifier()
-        self._capture_fn = capture_fn  # for tests; default is real grab
+        self._capture_fn = capture_fn
         self.image_max_side = image_max_side
         self.image_max_bytes = image_max_bytes
+        self.exclusions = exclusions
 
     # ---------- public API ----------
 
@@ -107,6 +109,13 @@ class ScreenVisionSource(PerceptionSource):
             return None
         if self._is_sensitive(window):
             return None
+
+        if self.exclusions is not None:
+            try:
+                if self.exclusions.is_excluded(window.get("process", "")):
+                    return None
+            except Exception:
+                pass
 
         rect = self._window_rect()
         if rect is None:

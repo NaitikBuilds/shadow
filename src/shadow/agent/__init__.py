@@ -20,8 +20,8 @@ from .style import StyleMirrorEngine, StyleResult
 from .taint import Taint, TaintedValue, TaintPropagator, max_taint
 from .vision_intents import (
     VisionIntent,
-    build_vision_context,
     build_combined_context,
+    build_vision_context,
     detect_intent,
     wants_memory_context,
 )

@@ -1,21 +1,14 @@
 """VisionOfferPolicy — decides when to offer vision.
 
-Tracks per-process cooldowns and session-scoped exclusions. The
-popup is offered only when:
+Exclusions are persisted in the vision_exclusions table (Commit 12).
+Cooldowns remain session-scoped — resetting on restart is fine for
+"don't ask again in 15 minutes".
 
-  - The screen changed this tick
-  - UIA + OCR produced thin text (< 200 chars total)
-  - The window category is visual-friendly
-  - The process is not excluded
-  - The cooldown window has elapsed for this process
-
-Exclusions are session-scoped here. Commit 12 promotes them to a
-persistent table.
+Pass `exclusions=None` to skip persistent checks (used in tests).
 """
 
 import time
 
-# Categories that benefit from vision.
 VISUAL_CATEGORIES = frozenset(
     {
         "browser",
@@ -25,7 +18,6 @@ VISUAL_CATEGORIES = frozenset(
     }
 )
 
-# Threshold below which a window is considered "visual only".
 THIN_TEXT_THRESHOLD_CHARS = 200
 
 DEFAULT_COOLDOWN_MIN = 15
@@ -38,11 +30,13 @@ class VisionOfferPolicy:
         self,
         cooldown_min: int = DEFAULT_COOLDOWN_MIN,
         enabled: bool = True,
+        exclusions=None,
     ):
         self.cooldown_min = int(cooldown_min)
         self.enabled = bool(enabled)
+        self.exclusions = exclusions  # VisionExclusionStore or None
         self._cooldowns: dict[str, float] = {}
-        self._excluded: set[str] = set()
+        self._local_exclusions: set[str] = set()
 
     # ---------- public API ----------
 
@@ -55,12 +49,13 @@ class VisionOfferPolicy:
         key = self._normalize(process)
         if not key:
             return False
-        if key in self._excluded:
+
+        if self.exclusions is not None and self.exclusions.is_excluded(key):
             return False
 
         last = self._cooldowns.get(key)
         if last is None:
-            return True  # never seen before
+            return True
 
         elapsed = time.monotonic() - last
         return elapsed >= (self.cooldown_min * 60)
@@ -75,27 +70,31 @@ class VisionOfferPolicy:
             return
         self._cooldowns[key] = time.monotonic()
         if choice == "never":
-            self._excluded.add(key)
+            if self.exclusions is not None:
+                self.exclusions.exclude(key, reason="user")
+            else:
+                self._local_exclusions.add(key)
 
     def is_excluded(self, process: str) -> bool:
-        return self._normalize(process) in self._excluded
+        key = self._normalize(process)
+        if self.exclusions is not None:
+            return self.exclusions.is_excluded(key)
+        return key in self._local_exclusions
 
     def excluded_processes(self) -> set[str]:
-        return set(self._excluded)
+        if self.exclusions is not None:
+            return {e["process"] for e in self.exclusions.all_excluded()}
+        return set()
 
     def clear_exclusions(self) -> None:
-        """Clear both exclusions and cooldowns.
-
-        Called when the user wants to reset all offer state — this
-        should restore immediate offers, not just unblock the process
-        but keep it on cooldown.
-        """
-        self._excluded.clear()
+        if self.exclusions is not None:
+            self.exclusions.clear_all()
+        self._local_exclusions.clear()
         self._cooldowns.clear()
 
     def seconds_until_ready(self, process: str) -> int:
         key = self._normalize(process)
-        if key in self._excluded:
+        if self.is_excluded(key):
             return -1
         last = self._cooldowns.get(key)
         if last is None:

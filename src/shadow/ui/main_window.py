@@ -39,6 +39,7 @@ from shadow.agent import (
     wants_memory_context,
 )
 from shadow.errors import ErrorReporter, Severity
+from shadow.memory import VisionExclusionStore
 from shadow.memory.retriever import ShadowRetriever
 from shadow.perception import ObservationWorker, ScreenVisionSource, VisionHotkeys
 from shadow.ui.ambient_panel import AmbientPanel
@@ -112,10 +113,13 @@ class MainWindow(QMainWindow):
         self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
         self.vision_service = vision_service
+        self.vision_exclusions = VisionExclusionStore(self.memory)
+
         vcfg = self.config.get("vision") or {}
         self.vision_offer_policy = VisionOfferPolicy(
             cooldown_min=vcfg.get("prompt_cooldown_min", 15),
             enabled=bool(vcfg.get("enabled", True)) and vision_service is not None,
+            exclusions=self.vision_exclusions,
         )
         self.vision_consent = VisionConsent(self.memory)
         self.vision_popup = VisionPopup(self)
@@ -127,6 +131,7 @@ class MainWindow(QMainWindow):
             self.screen_vision = ScreenVisionSource(
                 vision_service,
                 classifier=getattr(self, "classifier", None),
+                exclusions=self.vision_exclusions,
             )
 
         self.vision_hotkeys = None
@@ -323,6 +328,9 @@ class MainWindow(QMainWindow):
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
 
+        excl_action = settings_menu.addAction("Vision exclusions…")
+        excl_action.triggered.connect(self.open_vision_exclusions)
+
         hotkey_action = settings_menu.addAction("Vision active window (Ctrl+Shift+V)")
         hotkey_action.triggered.connect(self._run_vision_now)
 
@@ -438,6 +446,27 @@ class MainWindow(QMainWindow):
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
         dlg.exec()
+
+    def open_vision_exclusions(self):
+        from shadow.ui.vision_exclusions_panel import VisionExclusionsPanel
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Vision exclusions")
+        dlg.resize(520, 480)
+        layout = QVBoxLayout(dlg)
+
+        panel = VisionExclusionsPanel(self.vision_exclusions)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+        try:
+            self.indicator.refresh()
+        except Exception:
+            pass
 
     def _on_cloud_changed(self):
         # Note: a full restart is required for backend swap to take effect.
@@ -586,6 +615,17 @@ class MainWindow(QMainWindow):
 
         if not self._ensure_vision_consent():
             return
+
+        # Check if the active window is excluded before attempting to sample
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+            window = ActiveWindowSource().sample()
+            if window and self.screen_vision.exclusions:
+                if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
+                    self.output.append("<i>Vision is disabled for this application.</i>")
+                    return
+        except Exception:
+            pass
 
         self.output.append("<i>Analyzing current window with local vision…</i>")
         self.indicator.set_vision_active(True)
