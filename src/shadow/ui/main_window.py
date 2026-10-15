@@ -41,7 +41,12 @@ from shadow.agent import (
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory import VisionExclusionStore
 from shadow.memory.retriever import ShadowRetriever
-from shadow.perception import ObservationWorker, ScreenVisionSource, VisionHotkeys
+from shadow.perception import (
+    ObservationWorker,
+    RegionCaptureOverlay,
+    ScreenVisionSource,
+    VisionHotkeys,
+)
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
@@ -133,6 +138,10 @@ class MainWindow(QMainWindow):
                 classifier=getattr(self, "classifier", None),
                 exclusions=self.vision_exclusions,
             )
+
+        self.region_overlay = RegionCaptureOverlay(self)
+        self.region_overlay.region_selected.connect(self._on_region_selected)
+        self.region_overlay.cancelled.connect(self._on_region_capture_cancelled)
 
         self.vision_hotkeys = None
         if vision_service is not None:
@@ -271,12 +280,56 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+
     def _on_region_capture_requested(self):
-        """Handle Ctrl+Shift+Q. Real implementation lands in Commit 13."""
+        """Start region selection after checking vision availability and consent."""
+        if self.screen_vision is None:
+            self.output.append(
+                "<i>Region capture is unavailable. "
+                "Enable vision and ensure a vision service is configured.</i>"
+            )
+            return
+
+        if not self._ensure_vision_consent():
+            return
+
+        # Check if the active window is excluded before attempting to open the overlay
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+
+            window = ActiveWindowSource().sample()
+            if window and self.screen_vision.exclusions:
+                if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
+                    self.output.append(
+                        "<i>Vision is disabled for this application.</i>"
+                    )
+                    return
+        except Exception:
+            pass
+
         self.output.append(
-            "<i>Region capture is coming soon. "
-            "Try Ctrl+Shift+V to caption the active window.</i>"
+            "<i>Select a screen region by dragging. Press Esc to cancel.</i>"
         )
+        self.region_overlay.begin_selection()
+
+
+    def _on_region_selected(self, rect):
+        """Handle a completed region selection.
+
+        This commit establishes the UI and signal path only. Screenshot capture
+        and VLM inference will be added in the next region-capture step.
+        """
+        self.output.append(
+            "<i>Region selected: "
+            f"{rect.width()} × {rect.height()} pixels. "
+            "Region analysis will be connected in the next step.</i>"
+        )
+
+
+    def _on_region_capture_cancelled(self):
+        """Report cancellation without capturing or storing any image."""
+        self.output.append("<i>Region selection cancelled.</i>")
+
 
     def _ensure_vision_consent(self) -> bool:
         """Return True if the user has accepted vision consent.
@@ -619,10 +672,13 @@ class MainWindow(QMainWindow):
         # Check if the active window is excluded before attempting to sample
         try:
             from shadow.perception.active_window import ActiveWindowSource
+
             window = ActiveWindowSource().sample()
             if window and self.screen_vision.exclusions:
                 if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
-                    self.output.append("<i>Vision is disabled for this application.</i>")
+                    self.output.append(
+                        "<i>Vision is disabled for this application.</i>"
+                    )
                     return
         except Exception:
             pass
@@ -885,6 +941,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "vision_hotkeys") and self.vision_hotkeys is not None:
             self.vision_hotkeys.stop()
+
+        self.region_overlay.hide()
 
         # Stop quick capture hotkey listener
         if hasattr(self, "quick_capture"):

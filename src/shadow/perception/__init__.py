@@ -30,6 +30,7 @@ from .reading_position import (
     ReadingPositionReader,
     ReadingPositionTracker,
 )
+from .region_overlay import RegionCaptureOverlay
 from .screen_ocr import ScreenOCRSource
 from .screen_uia import ScreenUIASource
 from .screen_vision import ScreenVisionSource
@@ -89,4 +90,5 @@ __all__ = [
     "ScreenVisionSource",
     "VisionHotkeys",
     "ImageFileSource",
+    "RegionCaptureOverlay",
 ]
