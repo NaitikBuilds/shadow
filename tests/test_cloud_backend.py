@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -232,3 +234,169 @@ def test_test_connection_rate_limit():
     ok, msg = backend.test_connection()
     assert ok is False
     assert "429" in msg or "rate" in msg.lower()
+
+
+# ---------- vision ----------
+
+
+def _valid_png_bytes() -> bytes:
+    """Return a minimal PNG signature for request-construction tests."""
+    return b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+
+def test_gemini_25_flash_supports_vision():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    assert backend.supports_vision() is True
+
+
+@pytest.mark.parametrize(
+    ("provider_name", "model_name"),
+    [
+        ("groq", "openai/gpt-oss-120b"),
+        ("cerebras", "llama-3.3-70b"),
+        ("test", "test-model"),
+    ],
+)
+def test_non_gemini_models_do_not_claim_vision_support(provider_name, model_name):
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = provider_name
+    backend.provider.model = model_name
+
+    assert backend.supports_vision() is False
+
+
+def test_understand_image_sends_multimodal_request():
+    captured = {}
+
+    def handler(request):
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "A test image."}}]},
+        )
+
+    backend = make_backend(handler)
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    result = backend.understand_image(_valid_png_bytes())
+
+    assert result == "A test image."
+    payload = captured["payload"]
+    assert payload["model"] == "gemini-2.5-flash"
+    assert payload["stream"] is False
+
+    content = payload["messages"][0]["content"]
+    assert content[0]["text"] == "Describe this image briefly."
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_understand_image_query_uses_supplied_prompt():
+    captured = {}
+
+    def handler(request):
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "A blue car."}}]},
+        )
+
+    backend = make_backend(handler)
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    result = backend.understand_image(
+        _valid_png_bytes(),
+        task="query",
+        prompt="What color is the car?",
+    )
+
+    assert result == "A blue car."
+    assert (
+        captured["payload"]["messages"][0]["content"][0]["text"]
+        == "What color is the car?"
+    )
+
+
+def test_understand_image_rejects_empty_bytes():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(ValueError, match="non-empty"):
+        backend.understand_image(b"")
+
+
+def test_understand_image_rejects_unknown_format():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(ValueError, match="Unsupported image format"):
+        backend.understand_image(b"not an image")
+
+
+def test_understand_image_rejects_invalid_task():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(ValueError, match="Invalid vision task"):
+        backend.understand_image(_valid_png_bytes(), task="invalid")
+
+
+def test_understand_image_requires_query_prompt():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(ValueError, match="prompt is required"):
+        backend.understand_image(
+            _valid_png_bytes(),
+            task="query",
+            prompt="  ",
+        )
+
+
+def test_understand_image_rejects_unsupported_model():
+    backend = make_backend(lambda request: httpx.Response(200, json={}))
+
+    with pytest.raises(NotImplementedError, match="Vision is not supported"):
+        backend.understand_image(_valid_png_bytes())
+
+
+def test_understand_image_preserves_rate_limit_error():
+    backend = make_backend(
+        lambda request: httpx.Response(429, json={"error": "too many"}),
+    )
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(RateLimitError):
+        backend.understand_image(_valid_png_bytes())
+
+
+def test_understand_image_preserves_auth_error():
+    backend = make_backend(
+        lambda request: httpx.Response(401, json={"error": "bad key"}),
+    )
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(AuthError):
+        backend.understand_image(_valid_png_bytes())
+
+
+def test_understand_image_handles_invalid_response():
+    backend = make_backend(
+        lambda request: httpx.Response(200, json={"unexpected": "shape"}),
+    )
+    backend.provider.name = "gemini"
+    backend.provider.model = "gemini-2.5-flash"
+
+    with pytest.raises(CloudError, match="invalid response"):
+        backend.understand_image(_valid_png_bytes())

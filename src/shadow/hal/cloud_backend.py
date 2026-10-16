@@ -8,13 +8,21 @@ This module handles one provider at a time. Multi-provider failover is
 implemented by ProviderPool (added in a subsequent commit).
 """
 
+import base64
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass
 
 import httpx
 
-from .base import InferenceBackend
+from .base import (
+    TASK_CAPTION,
+    TASK_DETAILED_CAPTION,
+    TASK_OCR,
+    TASK_QUERY,
+    VALID_TASKS,
+    InferenceBackend,
+)
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are SHADOW, a private on-device life context agent. "
@@ -145,6 +153,150 @@ class CloudBackend(InferenceBackend):
             except (RateLimitError, AuthError):
                 # Caller (ProviderPool) handles failover
                 raise
+
+        # ---------- vision API ----------
+
+    def supports_vision(self) -> bool:
+        """Return whether this configured provider/model supports image input.
+
+        Keep this conservative: a provider having a vision API does not mean
+        every model available through that provider accepts image input.
+        """
+        provider_name = self.provider.name.strip().lower()
+        model_name = self.provider.model.strip().lower()
+
+        if provider_name == "gemini":
+            return model_name.startswith("gemini-2.5-flash")
+
+        return False
+
+    def understand_image(
+        self,
+        image_bytes: bytes,
+        task: str = TASK_CAPTION,
+        prompt: str = "",
+    ) -> str:
+        """Describe, inspect, or extract text from an image using cloud vision.
+
+        Images are encoded in memory and sent to the provider. This method
+        does not write image bytes to disk.
+        """
+        if task not in VALID_TASKS:
+            raise ValueError(
+                f"Invalid vision task: {task!r}. "
+                f"Expected one of {sorted(VALID_TASKS)}."
+            )
+
+        if not self.supports_vision():
+            raise NotImplementedError(
+                f"Vision is not supported by provider "
+                f"{self.provider.name!r} with model "
+                f"{self.provider.model!r}."
+            )
+
+        if not isinstance(image_bytes, bytes) or not image_bytes:
+            raise ValueError("image_bytes must be non-empty bytes.")
+
+        task_prompts = {
+            TASK_CAPTION: "Describe this image briefly.",
+            TASK_DETAILED_CAPTION: (
+                "Describe this image in detail. Include visible objects, "
+                "text, layout, and relevant relationships."
+            ),
+            TASK_OCR: (
+                "Extract all readable text from this image. "
+                "Preserve the original wording and line order where possible."
+            ),
+            TASK_QUERY: prompt.strip(),
+        }
+
+        effective_prompt = task_prompts[task]
+        if not effective_prompt:
+            raise ValueError("A non-empty prompt is required for the query task.")
+
+        # Identify the image type from its signature instead of trusting
+        # a filename or caller-supplied extension.
+        if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            mime_type = "image/png"
+        elif image_bytes.startswith(b"\xff\xd8\xff"):
+            mime_type = "image/jpeg"
+        elif image_bytes.startswith((b"GIF87a", b"GIF89a")):
+            mime_type = "image/gif"
+        elif image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+            mime_type = "image/webp"
+        else:
+            raise ValueError(
+                "Unsupported image format. Expected PNG, JPEG, GIF, or WebP."
+            )
+
+        encoded_image = base64.b64encode(image_bytes).decode("ascii")
+        image_url = f"data:{mime_type};base64,{encoded_image}"
+
+        payload = {
+            "model": self.provider.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": effective_prompt,
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url},
+                        },
+                    ],
+                }
+            ],
+            "max_tokens": 1024,
+            "stream": False,
+        }
+
+        try:
+            response = self._client.post(
+                "chat/completions",
+                json=payload,
+            )
+        except httpx.TimeoutException as exc:
+            raise NetworkError(
+                f"Vision request timed out: {exc}",
+                self.provider.name,
+            ) from exc
+        except httpx.RequestError as exc:
+            raise NetworkError(
+                f"Vision request failed: {exc}",
+                self.provider.name,
+            ) from exc
+
+        self._raise_for_status(response)
+
+        try:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise CloudError(
+                "Vision endpoint returned an invalid response.",
+                self.provider.name,
+                response.status_code,
+            ) from exc
+
+        # Accommodate APIs that return content as a list of text parts.
+        if isinstance(content, list):
+            content = "\n".join(
+                part["text"]
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            )
+
+        if not isinstance(content, str):
+            raise CloudError(
+                "Vision endpoint returned no usable text content.",
+                self.provider.name,
+                response.status_code,
+            )
+
+        return content.strip()
 
     def embed(self, text: str) -> list[float]:
         raise NotImplementedError(

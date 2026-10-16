@@ -19,7 +19,7 @@ import json
 import os
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -418,7 +418,7 @@ def render_case(case: AccuracyCase) -> bytes:
             (580, 200, 720, 270),
         ]
 
-        for box, label in zip(boxes, case.visible_text):
+        for box, label in zip(boxes, case.visible_text, strict=True):
             draw.rectangle(box, outline="#3977c3", width=3)
             draw.text(
                 (box[0] + 20, box[1] + 20),
