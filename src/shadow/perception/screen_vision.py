@@ -69,6 +69,7 @@ class ScreenVisionSource(PerceptionSource):
         image_max_side: int = DEFAULT_IMAGE_MAX_SIDE,
         image_max_bytes: int = DEFAULT_IMAGE_MAX_BYTES,
         exclusions=None,
+        preview_callback=None,
     ):
         self.vision_service = vision_service
         self.classifier = classifier or WindowClassifier()
@@ -76,6 +77,7 @@ class ScreenVisionSource(PerceptionSource):
         self.image_max_side = image_max_side
         self.image_max_bytes = image_max_bytes
         self.exclusions = exclusions
+        self.preview_callback = preview_callback
 
     # ---------- public API ----------
 
@@ -136,17 +138,42 @@ class ScreenVisionSource(PerceptionSource):
         metadata["process"] = window.get("process", "")
         metadata["title"] = window.get("title", "")
 
-        text = (
-            self.vision_service.analyze(
+        local_only = False
+
+        if self.preview_callback is not None:
+            decision = self.preview_callback(
+                image_bytes=image_bytes,
+                window_title=window.get("title", ""),
+                process_name=window.get("process", ""),
+                window_metadata=metadata,
+            )
+
+            if decision == "cancel":
+                return None
+            if decision == "local":
+                local_only = True
+            elif decision == "cloud":
+                authorized = True
+
+        if self.vision_service is None:
+            text = ""
+        elif hasattr(self.vision_service, "local_service"):
+            # VisionRouter path: supports cloud routing and local-only overrides.
+            text = self.vision_service.analyze(
                 image_bytes,
                 task=task,
                 prompt=prompt,
                 authorized=authorized,
-                window_metadata=metadata
+                window_metadata=metadata,
+                local_only=local_only,
             )
-            if self.vision_service is not None
-            else ""
-        )
+        else:
+            # Legacy VisionService path: preserve compatibility.
+            text = self.vision_service.analyze(
+                image_bytes,
+                task=task,
+                prompt=prompt,
+            )
         if not text:
             return None
 

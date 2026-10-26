@@ -18,6 +18,13 @@ CHANNEL_META = {
         "Documents",
         "Parses PDFs and text documents you open so SHADOW can reference them later.",
     ),
+    "vision_cloud": (
+        "Cloud vision",
+        "Allows explicitly requested screenshots to be sent to your "
+        "configured cloud vision provider after any required preview approval. "
+        "This is separate from cloud chat and local vision. Continuous and "
+        "background vision never upload screenshots.",
+    ),
     "meeting_audio": (
         "Meeting audio",
         "Transcribes meeting audio locally. Nothing is sent to the cloud.",

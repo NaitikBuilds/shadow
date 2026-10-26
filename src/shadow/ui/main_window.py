@@ -56,6 +56,11 @@ from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
 from shadow.ui.privacy_dashboard import PrivacyDashboard
 from shadow.ui.search_panel import SearchPanel
+from shadow.ui.vision_cloud_preview import (
+    VisionCloudDecision,
+    VisionCloudPreviewDialog,
+)
+from shadow.ui.vision_cloud_settings import VisionCloudSettingsPanel
 from shadow.ui.vision_consent import VisionConsent, VisionConsentDialog
 from shadow.ui.vision_popup import VisionPopup
 
@@ -145,6 +150,7 @@ class MainWindow(QMainWindow):
                 interactive_vision,
                 classifier=getattr(self, "classifier", None),
                 exclusions=self.vision_exclusions,
+                preview_callback=self._approve_vision_cloud_upload,
             )
 
         self.region_overlay = RegionCaptureOverlay(self)
@@ -358,6 +364,81 @@ class MainWindow(QMainWindow):
             pass
         return True
 
+    def open_vision_cloud_settings(self):
+        """Open the dialog used to configure vision cloud providers."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Vision Cloud Settings")
+        dlg.resize(560, 620)
+
+        layout = QVBoxLayout(dlg)
+
+        panel = VisionCloudSettingsPanel(self.config, self.memory)
+        panel.settings_changed.connect(self._on_vision_cloud_settings_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def _on_vision_cloud_settings_changed(self):
+        """Refresh the vision UI after vision-cloud settings are saved."""
+        self.output.append(
+            "<i>Vision Cloud settings saved. Restart SHADOW if required "
+            "for provider changes to take effect.</i>"
+        )
+
+    def _approve_vision_cloud_upload(
+        self,
+        image_bytes: bytes,
+        window_title: str,
+        process_name: str,
+        window_metadata: dict,
+    ) -> str:
+        """Request per-window approval before a cloud vision upload."""
+
+        vision_cfg = self.config.get("vision") or {}
+        cloud_cfg = vision_cfg.get("cloud") or {}
+
+        # Local-first default: never initiate a cloud upload if disabled.
+        if not cloud_cfg.get("enabled", False):
+            return "local"
+
+        # Consent must be checked before showing a cloud approval dialog.
+        try:
+            if not self.memory.get_consent("vision_cloud"):
+                return "local"
+        except Exception:
+            return "local"
+
+        # Sensitive windows are blocked before any preview can authorize upload.
+        if window_metadata.get("is_sensitive", False):
+            return "local"
+
+        if not cloud_cfg.get("require_preview", True):
+            return "cloud"
+
+        providers = cloud_cfg.get("providers") or []
+        provider_name = str(providers[0]) if providers else "configured provider"
+
+        dlg = VisionCloudPreviewDialog(
+            image_bytes=image_bytes,
+            window_title=window_title,
+            process_name=process_name,
+            provider_name=provider_name,
+            parent=self,
+        )
+        dlg.exec()
+
+        if dlg.decision == VisionCloudDecision.SEND_TO_CLOUD:
+            return "cloud"
+
+        if dlg.decision == VisionCloudDecision.USE_LOCAL:
+            return "local"
+
+        return "cancel"
+
     # ---------- menu (NEW in Commit 3) ----------
 
     def _build_menu(self):
@@ -384,6 +465,9 @@ class MainWindow(QMainWindow):
 
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
+
+        vision_cloud_action = settings_menu.addAction("Vision Cloud…")
+        vision_cloud_action.triggered.connect(self.open_vision_cloud_settings)
 
         excl_action = settings_menu.addAction("Vision exclusions…")
         excl_action.triggered.connect(self.open_vision_exclusions)
