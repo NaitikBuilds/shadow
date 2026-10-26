@@ -188,7 +188,7 @@ cloud:
     priority: 1
   - name: gemini
     enabled: true
-    model: gemini-2.5-flash
+    model: gemini-3.6-flash
     env_key: SHADOW_GEMINI_KEY
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     priority: 2
@@ -201,15 +201,27 @@ cloud:
 
 vision:
   enabled: true
-  text_model_path: "models/moondream2/moondream2-text-model-f16.gguf"
-  mmproj_path: "models/moondream2/moondream2-mmproj-f16.gguf"
+
+  text_model_path: models/moondream2/moondream2-text-model-f16.gguf
+  mmproj_path: models/moondream2/moondream2-mmproj-f16.gguf
+
   n_threads: 4
   n_ctx: 2048
   unload_after_sec: 300
   prompt_cooldown_min: 15
   require_thin_text: true
+
   image_max_side: 1024
   image_max_bytes: 10485760
+
+  local_fallback: true
+
+  cloud:
+    enabled: true
+    providers:
+      - gemini
+    require_preview: true
+    fallback_to_local: true
 
 modes:
   default: balanced

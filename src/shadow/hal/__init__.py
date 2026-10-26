@@ -22,6 +22,7 @@ from .health import HealthMonitor
 from .hybrid_backend import HybridBackend
 from .moondream_backend import Moondream2Backend
 from .provider_pool import AllProvidersFailed, ProviderPool, ProviderState
+from .vision_router import VisionRouter, VisionRoutingError, VisionRoutingResult
 from .vision_service import VisionService
 
 __all__ = [
@@ -46,4 +47,7 @@ __all__ = [
     "VALID_TASKS",
     "Moondream2Backend",
     "VisionService",
+    "VisionRouter",
+    "VisionRoutingError",
+    "VisionRoutingResult",
 ]

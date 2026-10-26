@@ -61,7 +61,7 @@ class ConnectionTestWorker(QThread):
                 model=self.model,
                 api_key=self.api_key,
             )
-            backend = CloudBackend(cfg, timeout_sec=10, max_retries=0)
+            backend = CloudBackend(cfg, timeout_sec=30, max_retries=0)
             try:
                 ok, message = backend.test_connection()
                 self.finished.emit(ok, message)

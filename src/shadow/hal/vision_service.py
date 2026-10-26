@@ -55,6 +55,7 @@ class VisionService:
         image_bytes: bytes,
         task: str = TASK_CAPTION,
         prompt: str = "",
+        **kwargs,
     ) -> str:
         """Analyze an image. Returns text or empty string on failure."""
         if not self._enabled or self._load_failed:
@@ -67,7 +68,7 @@ class VisionService:
             return ""
 
         try:
-            return backend.understand_image(image_bytes, task=task, prompt=prompt)
+            return backend.understand_image(image_bytes, task=task, prompt=prompt, **kwargs)
         except Exception:
             return ""
 

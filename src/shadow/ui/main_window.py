@@ -94,11 +94,14 @@ class MainWindow(QMainWindow):
         config,
         reporter: ErrorReporter | None = None,
         vision_service=None,
+        vision_router=None,
     ):
         super().__init__()
         self.backend = backend
         self.memory = memory
         self.config = config
+        self.vision_service = vision_service
+        self.vision_router = vision_router
         self.recovery_engine = RecoveryEngine(self.memory)
         self.focus_shield = FocusShield(self.memory)
         self.forecasting_engine = ForecastingEngine(self.memory)
@@ -117,7 +120,6 @@ class MainWindow(QMainWindow):
         self.feedback = FeedbackStore(self.memory)
         self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
-        self.vision_service = vision_service
         self.vision_exclusions = VisionExclusionStore(self.memory)
 
         vcfg = self.config.get("vision") or {}
@@ -133,8 +135,14 @@ class MainWindow(QMainWindow):
 
         self.screen_vision = None
         if vision_service is not None:
+            interactive_vision = (
+                self.vision_router
+                if self.vision_router is not None
+                else self.vision_service
+            )
+
             self.screen_vision = ScreenVisionSource(
-                vision_service,
+                interactive_vision,
                 classifier=getattr(self, "classifier", None),
                 exclusions=self.vision_exclusions,
             )
@@ -280,7 +288,6 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-
     def _on_region_capture_requested(self):
         """Start region selection after checking vision availability and consent."""
         if self.screen_vision is None:
@@ -312,7 +319,6 @@ class MainWindow(QMainWindow):
         )
         self.region_overlay.begin_selection()
 
-
     def _on_region_selected(self, rect):
         """Handle a completed region selection.
 
@@ -325,11 +331,9 @@ class MainWindow(QMainWindow):
             "Region analysis will be connected in the next step.</i>"
         )
 
-
     def _on_region_capture_cancelled(self):
         """Report cancellation without capturing or storing any image."""
         self.output.append("<i>Region selection cancelled.</i>")
-
 
     def _ensure_vision_consent(self) -> bool:
         """Return True if the user has accepted vision consent.
@@ -683,10 +687,10 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        self.output.append("<i>Analyzing current window with local vision…</i>")
+        self.output.append("<i>Analyzing current window…</i>")
         self.indicator.set_vision_active(True)
         try:
-            result = self.screen_vision.sample(task="caption")
+            result = self.screen_vision.sample(task="caption", authorized=True)
         finally:
             self.indicator.set_vision_active(False)
         if not result:
@@ -885,7 +889,11 @@ class MainWindow(QMainWindow):
 
         self.indicator.set_vision_active(True)
         try:
-            result = self.screen_vision.sample(task=intent.task, prompt=intent.prompt)
+            result = self.screen_vision.sample(
+                task=intent.task,
+                prompt=intent.prompt,
+                authorized=True,
+            )
         except Exception:
             result = None
         finally:

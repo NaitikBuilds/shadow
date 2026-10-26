@@ -21,6 +21,15 @@ Reason: Official PyPI wheels are not published for Windows. The community
 CPU wheel is stable and widely used.
 Revisit: When official Windows wheels ship.
 
+**2026-10 — Upgrade to `llama-cpp-python` 0.3.36 (official Windows CPU
+wheel), superseding the oobabooga 0.3.7 wheel.**
+Reason: 0.3.7's vendored CLIP encoder aborts the process (access violation
+or GGML assert) while encoding a Moondream2 image on Ctrl+Shift+V. 0.3.36
+uses the mtmd vision path and completes inference. Official Windows CPU
+wheels are now published.
+Revisit: If a future release regresses Moondream2 support or drops the
+Windows CPU wheel.
+
 **2026-09 — Do not use C# / WinUI 3 despite being Windows-first.**
 Reason: Python's AI/ML ecosystem is significantly stronger; iteration speed
 beats native polish for early development. Packaging in Phase 8 will handle

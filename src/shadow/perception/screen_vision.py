@@ -83,12 +83,16 @@ class ScreenVisionSource(PerceptionSource):
         self,
         task: str = "caption",
         prompt: str = "",
+        authorized: bool = False,
+        window_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Capture the active window, run vision, return payload or None.
 
         Args:
             task: one of caption / detailed_caption / ocr / query.
             prompt: question when task == query.
+            authorized: whether the request is authorized for cloud upload.
+            window_metadata: additional context for routing.
 
         Returns payload with:
             text, task, prompt, window_title, process, image_bytes,
@@ -107,9 +111,10 @@ class ScreenVisionSource(PerceptionSource):
         )
         if profile.is_self:
             return None
-        if self._is_sensitive(window):
-            return None
 
+        is_sensitive = self._is_sensitive(window)
+        if is_sensitive:
+            return None
         if self.exclusions is not None:
             try:
                 if self.exclusions.is_excluded(window.get("process", "")):
@@ -125,8 +130,20 @@ class ScreenVisionSource(PerceptionSource):
         if not image_bytes:
             return None
 
+        # Merge window info into metadata for the router
+        metadata = window_metadata or {}
+        metadata["is_sensitive"] = is_sensitive
+        metadata["process"] = window.get("process", "")
+        metadata["title"] = window.get("title", "")
+
         text = (
-            self.vision_service.analyze(image_bytes, task=task, prompt=prompt)
+            self.vision_service.analyze(
+                image_bytes,
+                task=task,
+                prompt=prompt,
+                authorized=authorized,
+                window_metadata=metadata
+            )
             if self.vision_service is not None
             else ""
         )

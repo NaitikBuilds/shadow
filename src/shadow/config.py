@@ -379,11 +379,12 @@ def save_cloud_settings(
 
 
 def vision_config(config: dict) -> dict:
-    """Return the vision block with safe defaults."""
+    """Return vision configuration with safe nested defaults."""
+
     defaults = {
         "enabled": True,
         "text_model_path": ("models/moondream2/moondream2-text-model-f16.gguf"),
-        "mmproj_path": "models/moondream2/moondream2-mmproj-f16.gguf",
+        "mmproj_path": ("models/moondream2/moondream2-mmproj-f16.gguf"),
         "n_threads": 4,
         "n_ctx": 2048,
         "unload_after_sec": 300,
@@ -391,8 +392,26 @@ def vision_config(config: dict) -> dict:
         "require_thin_text": True,
         "image_max_side": 1024,
         "image_max_bytes": 10 * 1024 * 1024,
+        "local_fallback": True,
+        "cloud": {
+            "enabled": False,
+            "providers": ["gemini"],
+            "require_preview": True,
+            "fallback_to_local": True,
+        },
     }
-    return {**defaults, **(config.get("vision") or {})}
+
+    user = config.get("vision") or {}
+    merged = {**defaults, **user}
+
+    # Deep-merge this nested section so partial YAML overrides do not
+    # erase the safe defaults.
+    merged["cloud"] = {
+        **defaults["cloud"],
+        **(user.get("cloud") or {}),
+    }
+
+    return merged
 
 
 def image_files_config(config: dict) -> dict:

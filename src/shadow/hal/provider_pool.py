@@ -130,22 +130,115 @@ class ProviderPool(InferenceBackend):
         task: str = "caption",
         prompt: str = "",
     ) -> str:
-        """Delegate vision to the local fallback.
+        """Try eligible cloud vision providers, then local fallback.
 
-        Cloud providers may eventually support vision. For now, vision
-        is always local.
+        Providers are tried in priority order. Unsupported models and
+        providers in cooldown are skipped.
         """
-        if self._local_fallback is not None:
-            return self._local_fallback.understand_image(
-                image_bytes, task=task, prompt=prompt
+        tried: list[str] = []
+
+        for state in self._states:
+            backend = state.backend
+            provider_name = backend.provider.name
+
+            if not state.is_available:
+                continue
+
+            try:
+                if not backend.supports_vision():
+                    continue
+            except (AttributeError, NotImplementedError):
+                continue
+
+            tried.append(provider_name)
+
+            try:
+                result = backend.understand_image(
+                    image_bytes,
+                    task=task,
+                    prompt=prompt,
+                )
+
+                if not isinstance(result, str) or not result.strip():
+                    state.last_error = "Vision provider returned empty content."
+                    state.consecutive_failures += 1
+                    continue
+
+                state.last_success_at = time.monotonic()
+                state.consecutive_failures = 0
+                state.last_error = ""
+
+                return result.strip()
+
+            except RateLimitError as exc:
+                self._cool_down(state, COOLDOWN_RATE_LIMIT, exc)
+
+            except AuthError as exc:
+                self._cool_down(state, COOLDOWN_AUTH, exc)
+
+            except ServerError as exc:
+                self._cool_down(state, COOLDOWN_SERVER_ERROR, exc)
+
+            except NetworkError as exc:
+                self._cool_down(state, COOLDOWN_NETWORK, exc)
+
+            except Exception as exc:
+                # Keep diagnostics useful without logging image contents.
+                state.last_error = f"Vision request failed ({type(exc).__name__})."
+                state.consecutive_failures += 1
+
+        # All eligible cloud providers failed or were unavailable.
+        local = self._local_fallback
+        local_supports_vision = False
+
+        if local is not None:
+            try:
+                local_supports_vision = bool(local.supports_vision())
+            except (AttributeError, NotImplementedError):
+                local_supports_vision = False
+
+        if local is not None and local_supports_vision:
+            result = local.understand_image(
+                image_bytes,
+                task=task,
+                prompt=prompt,
             )
-        raise NotImplementedError(
-            "ProviderPool has no vision support and no local fallback."
+
+            if isinstance(result, str) and result.strip():
+                return result.strip()
+
+            raise AllProvidersFailed(
+                "Cloud and local vision returned no usable content.",
+                tried,
+            )
+
+        # Nothing in this pool can do vision at all, so report the pool as
+        # incapable rather than as a failure of vision-capable providers.
+        if not tried:
+            raise NotImplementedError(
+                "ProviderPool has no vision support and no usable local fallback."
+            )
+
+        raise AllProvidersFailed(
+            "Cloud vision failed and no local vision fallback is configured.",
+            tried,
         )
 
     def supports_vision(self) -> bool:
+        """Whether at least one configured backend supports vision."""
+        for state in self._states:
+            try:
+                if state.backend.supports_vision():
+                    return True
+            except (AttributeError, NotImplementedError):
+                continue
+
         if self._local_fallback is not None:
-            return self._local_fallback.supports_vision()
+            try:
+                return bool(self._local_fallback.supports_vision())
+            except (AttributeError, NotImplementedError):
+                return False
+
         return False
 
     @property

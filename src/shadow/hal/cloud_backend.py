@@ -166,7 +166,8 @@ class CloudBackend(InferenceBackend):
         model_name = self.provider.model.strip().lower()
 
         if provider_name == "gemini":
-            return model_name.startswith("gemini-2.5-flash")
+            # Support most Gemini Flash and Pro models which are vision-capable
+            return "flash" in model_name or "pro" in model_name
 
         return False
 

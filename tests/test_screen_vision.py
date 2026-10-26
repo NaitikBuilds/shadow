@@ -7,7 +7,7 @@ class FakeVisionService:
         self.reply = reply
         self.calls: list[tuple] = []
 
-    def analyze(self, image_bytes, task="caption", prompt=""):
+    def analyze(self, image_bytes, task="caption", prompt="", **kwargs):
         self.calls.append((image_bytes[:8], task, prompt))
         return self.reply if image_bytes else ""
 

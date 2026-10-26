@@ -2,8 +2,17 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from shadow.config import consent_channels, load_config
+from shadow.config import consent_channels, load_config, vision_config
 from shadow.errors import ErrorReporter, install_exception_hook
+from shadow.hal import (
+    CloudBackend,
+    HealthMonitor,
+    Moondream2Backend,
+    ProviderConfig,
+    ProviderPool,
+    VisionRouter,
+    VisionService,
+)
 from shadow.hal.cpu_backend import CpuBackend
 from shadow.memory import CrashRecovery, MemoryStore, RetentionPolicy
 from shadow.ui.main_window import MainWindow
@@ -38,7 +47,7 @@ def main() -> int:
 
     # Optional cloud layer — falls back to local automatically.
     from shadow.config import build_provider_pool, cloud_enabled
-    from shadow.hal import HealthMonitor, HybridBackend
+    from shadow.hal import HybridBackend
 
     backend = local_backend
     if cloud_enabled(config):
@@ -51,8 +60,6 @@ def main() -> int:
             )
 
     # Vision service — lazy loaded, on-demand only.
-    from shadow.config import vision_config
-    from shadow.hal import Moondream2Backend, VisionService
 
     vcfg = vision_config(config)
 
@@ -67,6 +74,76 @@ def main() -> int:
 
     vision_service = VisionService(
         _make_vision_backend, enabled=bool(vcfg.get("enabled", True))
+    )
+
+    # Dedicated cloud vision pool — separate from the text-model pool.
+    from shadow.config import resolve_key
+
+    health = HealthMonitor()
+    vision_cloud_pool = None
+
+    vision_cloud_cfg = vcfg.get("cloud") or {}
+    text_cloud_cfg = config.get("cloud") or {}
+
+    if vision_cloud_cfg.get("enabled", False):
+        # Index the existing provider configuration by provider name.
+        configured_providers = {
+            str(entry.get("name", "")).lower(): entry
+            for entry in text_cloud_cfg.get("providers", [])
+            if isinstance(entry, dict)
+        }
+
+        vision_providers = []
+
+        # Only attempt providers explicitly selected for vision.
+        for priority, provider_name in enumerate(
+            vision_cloud_cfg.get("providers", ["gemini"]),
+            start=1,
+        ):
+            entry = configured_providers.get(str(provider_name).lower())
+
+            if not entry or not entry.get("enabled", True):
+                print(f"[Main] Provider {provider_name} disabled or not found.")
+                continue
+
+            api_key = resolve_key(entry.get("env_key", ""))
+            if not api_key:
+                print(f"[Main] Provider {provider_name} missing API key.")
+                continue
+
+            provider_cfg = ProviderConfig(
+                name=entry.get("name", "unknown"),
+                base_url=entry.get("base_url", ""),
+                model=entry.get("model", ""),
+                api_key=api_key,
+            )
+
+            candidate = CloudBackend(
+                provider=provider_cfg,
+                timeout_sec=text_cloud_cfg.get("timeout_sec", 30),
+                max_retries=text_cloud_cfg.get("max_retries", 2),
+            )
+
+            # Never assume a text-only model supports image input.
+            if candidate.supports_vision():
+                print(f"[Main] Provider {provider_name} supports vision. Adding to pool.")
+                vision_providers.append((priority, candidate))
+            else:
+                print(f"[Main] Provider {provider_name} (model: {candidate.provider.model}) does NOT support vision.")
+                candidate.close()
+
+        if vision_providers:
+            vision_cloud_pool = ProviderPool(
+                providers=vision_providers,
+                local_fallback=None,
+            )
+
+    vision_router = VisionRouter(
+        local_service=vision_service,
+        cloud_pool=vision_cloud_pool,
+        config={"cloud": vision_cloud_cfg},
+        health=health,
+        consent_store=memory,
     )
 
     # Startup recovery — detects crashes, repairs orphan observations
@@ -108,6 +185,7 @@ def main() -> int:
         config,
         reporter=reporter,
         vision_service=vision_service,
+        vision_router=vision_router,
     )
     window.show()
 

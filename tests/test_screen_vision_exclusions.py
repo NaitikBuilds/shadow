@@ -6,7 +6,7 @@ class FakeVisionService:
     def __init__(self):
         self.calls = 0
 
-    def analyze(self, image_bytes, task="caption", prompt=""):
+    def analyze(self, image_bytes, task="caption", prompt="", **kwargs):
         self.calls += 1
         return "a caption"
 
