@@ -36,11 +36,17 @@ position memory, stuck detector, UIA vs OCR comparison harness.
 - Prompt preview for transparency
 - API keys via env var or Windows Credential Manager
 
-## Next Phases
+### V1.0 Vision Understanding (Phase 3.6)✅
+- Local visual understanding and image ingestion
+- Screen-context queries
+- Cloud vision routing with local fallback
+- Vision consent and per-application exclusions
+- Per-window cloud-upload preview and approval
+- Privacy-aware screen-region capture
+- Text-only region observation storage
 
-### V1.0 Vision (Phase 3.6)
-VLM backend, Moondream2 CPU, screen vision source, image file ingestion,
-screen context queries, region capture / Circle-to-Ask.
+
+## Next Phases
 
 ### V1.0 Advanced Proactive (Phase 4)
 Shadow Cloning, Ethical Mirror, Cross-Project Weaver, Silent Pair Partner,

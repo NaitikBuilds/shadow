@@ -2,4 +2,4 @@ import shadow
 
 
 def test_version():
-    assert shadow.__version__ == "0.3.7"
+    assert shadow.__version__ == "0.3.6"
