@@ -28,7 +28,7 @@ The project is developed in the open for learning and portfolio purposes, but is
 | Infrastructure hardening | ✅ Complete |
 | Proactive intelligence | ✅ Complete |
 | Structured screen (UIA) | ✅ Complete |
-| Vision understanding | 🔒 Next |
+| Vision understanding | ✅ Complete |
 | Agentic actions | 🔒 Planned |
 | Cloud LLM integration | ✅ Complete |
 

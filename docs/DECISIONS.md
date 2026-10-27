@@ -203,6 +203,10 @@ Revisit: If we add a Linux port.
 
 ## Documentation
 
+**2026-10 — Privacy-aware region capture with text-only persistence.**
+Reason: Users need to ask questions about specific screen regions without exposing unrelated screen content. SHADOW uses an explicit region-selection overlay and applies privacy checks before analysis. Only the selected region is sent for visual analysis, subject to consent and configured privacy restrictions. The resulting question and answer may be stored as a text-only observation; the captured image itself is not persisted.
+Revisit: When region-capture privacy controls or storage requirements change.
+
 **2026-10 — Cloud LLM integration as opt-in hybrid.**
 Reason: Local CPU inference cannot deliver both instant response and
 intelligent answers on 16 GB hardware. Cloud LLMs solve both. SHADOW
