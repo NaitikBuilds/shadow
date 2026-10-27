@@ -216,6 +216,12 @@ vision:
 
   local_fallback: true
 
+  region_capture:
+    enabled: false
+    hotkey: "<ctrl>+<shift>+q"
+    default_prompt: "What is this?"
+    max_region_mb: 10
+
   cloud:
     enabled: true
     providers:

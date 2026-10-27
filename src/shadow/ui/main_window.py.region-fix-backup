@@ -1,0 +1,1298 @@
+import io
+import sys
+
+from PIL import Image
+from PySide6.QtCore import QRect, Qt, QThread, Signal
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,  # NEW in Commit 3
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from shadow.agent import (
+    AmbientTaskList,
+    ClipboardActionsEngine,
+    DoNotDisturb,
+    FeedbackStore,
+    FocusPatternsEngine,
+    FocusShield,
+    ForecastingEngine,
+    IntentNotesEngine,
+    KnowledgeDecayEngine,
+    PromptBuilder,
+    QuickCapture,
+    RecoveryEngine,
+    RecurringPatternEngine,
+    SessionMemory,
+    StuckDetector,
+    TaintPropagator,
+    VisionOfferPolicy,
+    build_combined_context,
+    build_vision_context,
+    detect_intent,
+    wants_memory_context,
+)
+from shadow.errors import ErrorReporter, Severity
+from shadow.memory import VisionExclusionStore
+from shadow.memory.retriever import ShadowRetriever
+from shadow.perception import (
+    ObservationWorker,
+    RegionCaptureOverlay,
+    ScreenVisionSource,
+    VisionHotkeys,
+)
+from shadow.perception.region_analysis import RegionAnalysisWorker
+from shadow.ui.ambient_panel import AmbientPanel
+from shadow.ui.cloud_panel import CloudPanel
+from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
+from shadow.ui.diagnostics_panel import DiagnosticsPanel
+from shadow.ui.indicator import ObservationIndicator
+from shadow.ui.insight_panel import InsightPanel
+from shadow.ui.notifications import TrayNotifier
+from shadow.ui.privacy_dashboard import PrivacyDashboard
+from shadow.ui.search_panel import SearchPanel
+from shadow.ui.vision_cloud_preview import (
+    VisionCloudDecision,
+    VisionCloudPreviewDialog,
+)
+from shadow.ui.vision_cloud_settings import VisionCloudSettingsPanel
+from shadow.ui.vision_consent import VisionConsent, VisionConsentDialog
+from shadow.ui.vision_popup import VisionPopup
+
+
+class InferenceWorker(QThread):
+    """Runs the LLM in a background thread and emits streamed chunks."""
+
+    chunk = Signal(str)
+    done = Signal()
+    failed = Signal(str)
+
+    def __init__(self, backend, prompt: str, max_tokens: int):
+        super().__init__()
+        self.backend = backend
+        self.prompt = prompt
+        self.max_tokens = max_tokens
+
+    def run(self):
+        try:
+            for piece in self.backend.generate_stream(
+                self.prompt, max_tokens=self.max_tokens
+            ):
+                if self.isInterruptionRequested():
+                    break
+                self.chunk.emit(piece)
+            self.done.emit()
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(str(exc))
+
+
+class MainWindow(QMainWindow):
+    def __init__(
+        self,
+        backend,
+        memory,
+        config,
+        reporter: ErrorReporter | None = None,
+        vision_service=None,
+        vision_router=None,
+    ):
+        super().__init__()
+        self.backend = backend
+        self.memory = memory
+        self.config = config
+        self.vision_service = vision_service
+        self.vision_router = vision_router
+        self.recovery_engine = RecoveryEngine(self.memory)
+        self.focus_shield = FocusShield(self.memory)
+        self.forecasting_engine = ForecastingEngine(self.memory)
+        self.decay_engine = KnowledgeDecayEngine(self.memory)
+        self.taint = TaintPropagator()
+        self.clipboard_actions = ClipboardActionsEngine(self.memory)
+        self.quick_capture = QuickCapture(self.memory, self.config)
+        self.quick_capture.on_capture = self._on_quick_capture
+        self.quick_capture.start()
+        self.session_memory = SessionMemory(self.memory)
+        self.ambient_tasks = AmbientTaskList(self.memory, self.session_memory)
+        self.focus_patterns = FocusPatternsEngine(self.memory)
+        self.recurring_patterns = RecurringPatternEngine(self.memory)
+        self.intent_notes = IntentNotesEngine(self.memory)
+        self.dnd = DoNotDisturb(self.memory)
+        self.feedback = FeedbackStore(self.memory)
+        self.stuck_detector = StuckDetector(self.memory, self.config)
+        self.reporter = reporter
+        self.vision_exclusions = VisionExclusionStore(self.memory)
+
+        vcfg = self.config.get("vision") or {}
+        self.vision_offer_policy = VisionOfferPolicy(
+            cooldown_min=vcfg.get("prompt_cooldown_min", 15),
+            enabled=bool(vcfg.get("enabled", True)) and vision_service is not None,
+            exclusions=self.vision_exclusions,
+        )
+        self.vision_consent = VisionConsent(self.memory)
+        self.vision_popup = VisionPopup(self)
+        self.vision_popup.choice_made.connect(self._on_vision_choice)
+        self._pending_vision_offer: dict = {}
+
+        self.screen_vision = None
+        if vision_service is not None:
+            interactive_vision = (
+                self.vision_router
+                if self.vision_router is not None
+                else self.vision_service
+            )
+
+            self.screen_vision = ScreenVisionSource(
+                interactive_vision,
+                classifier=getattr(self, "classifier", None),
+                exclusions=self.vision_exclusions,
+                preview_callback=self._approve_vision_cloud_upload,
+            )
+
+        self.region_overlay = RegionCaptureOverlay(self)
+        self.region_overlay.region_selected.connect(self._on_region_selected)
+        self.region_overlay.cancelled.connect(self._on_region_capture_cancelled)
+
+        self.vision_hotkeys = None
+        if vision_service is not None:
+            self.vision_hotkeys = VisionHotkeys(
+                enabled=bool(self.config.get("vision", {}).get("enabled", True))
+            )
+            self.vision_hotkeys.vision_requested.connect(self._run_vision_now)
+            self.vision_hotkeys.region_capture_requested.connect(
+                self._on_region_capture_requested
+            )
+            self.vision_hotkeys.start()
+        self.prompt_builder = PromptBuilder()
+        self._full_shutdown = False
+        self.retriever = ShadowRetriever(self.memory, self.backend)
+        self.worker = None
+        self._shutting_down = False
+
+        self.setWindowTitle("SHADOW — Silent On-Device Life Context Agent")
+        self.resize(900, 600)
+
+        central = QWidget()
+        layout = QVBoxLayout(central)
+
+        info = backend.info
+        backend_name = info.get("backend", "cpu").upper()
+        self.backend_label = QLabel(f"Backend: {backend_name}")
+        layout.addWidget(self.backend_label)
+
+        self.route_chip = QLabel("Route: —")
+        self.route_chip.setStyleSheet(
+            "padding: 2px 8px; border-radius: 8px; "
+            "background-color: #eee; color: #333; font-size: 11px;"
+        )
+        layout.addWidget(self.route_chip)
+        self._refresh_route_chip()
+
+        self.indicator = ObservationIndicator(self.memory, self.config)
+        layout.addWidget(self.indicator)
+
+        self.observer_status = QLabel("Observer: not started")
+        self.observer_status.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(self.observer_status)
+
+        self.observer = None
+
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(QLabel("Mode:"))
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["lite", "balanced", "active"])
+        self.mode_combo.setCurrentText(config["modes"]["default"])
+        mode_layout.addWidget(self.mode_combo)
+        mode_layout.addStretch()
+        layout.addLayout(mode_layout)
+        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        layout.addWidget(self.output)
+
+        input_layout = QHBoxLayout()
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("Ask your Shadow…")
+        self.input.returnPressed.connect(self.send_query)
+        input_layout.addWidget(self.input)
+        self.send_btn = QPushButton("Send")
+        self.send_btn.clicked.connect(self.send_query)
+        input_layout.addWidget(self.send_btn)
+        layout.addLayout(input_layout)
+
+        self.wipe_btn = QPushButton("Wipe Shadow")
+        self.wipe_btn.clicked.connect(self.wipe_shadow)
+        layout.addWidget(self.wipe_btn)
+
+        self.setCentralWidget(central)
+        self._setup_tray()
+
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.setContext(Qt.ApplicationShortcut)
+        self.search_shortcut.activated.connect(self.open_search_panel)
+
+        self.dnd_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        self.dnd_shortcut.setContext(Qt.ApplicationShortcut)
+        self.dnd_shortcut.activated.connect(self._toggle_dnd)
+
+        self._build_menu()  # NEW in Commit 3
+        self.memory.log_activity("app_start", "SHADOW started")
+
+        self._sync_dnd_ui()
+
+        self._start_observer()
+
+    def _setup_tray(self):
+        self.tray = TrayNotifier(self)
+        self.tray.show_window_requested.connect(self._restore_window)
+        self.tray.quit_requested.connect(self._request_quit)
+        self.tray.dnd_toggled.connect(self._on_dnd_toggle)
+        self.tray.set_dnd(self.dnd.enabled)
+        self.tray.show()
+
+        if self.reporter is not None:
+            self.reporter.subscribe(Severity.TRAY, self.tray.notify)
+
+    def _toggle_dnd(self):
+        new_state = not self.dnd.enabled
+        self._on_dnd_toggle(new_state)
+
+    def _restore_window(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _request_quit(self):
+        from PySide6.QtWidgets import QApplication
+
+        self._full_shutdown = True
+        self.close()
+        QApplication.quit()
+
+    def _on_dnd_toggle(self, enabled: bool):
+        try:
+            self.dnd.set(enabled)
+        except Exception:
+            pass
+        try:
+            self.tray.set_dnd(enabled)
+        except Exception:
+            pass
+        if hasattr(self, "_dnd_menu_action"):
+            self._dnd_menu_action.setChecked(enabled)
+
+    def _sync_dnd_ui(self):
+        try:
+            self.tray.set_dnd(self.dnd.enabled)
+            if hasattr(self, "_dnd_menu_action"):
+                self._dnd_menu_action.setChecked(self.dnd.enabled)
+        except Exception:
+            pass
+
+    def _on_region_capture_requested(self):
+        """Start region selection after checking vision availability and consent."""
+        if self.screen_vision is None:
+            self.output.append(
+                "<i>Region capture is unavailable. "
+                "Enable vision and ensure a vision service is configured.</i>"
+            )
+            return
+
+        if not self._ensure_vision_consent():
+            return
+
+        # Check if the active window is excluded before attempting to open the overlay
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+
+            window = ActiveWindowSource().sample()
+            if window and self.screen_vision.exclusions:
+                if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
+                    self.output.append(
+                        "<i>Vision is disabled for this application.</i>"
+                    )
+                    return
+        except Exception:
+            pass
+
+        self.output.append(
+            "<i>Select a screen region by dragging. Press Esc to cancel.</i>"
+        )
+        self.region_overlay.begin_selection()
+
+    def _on_region_selected(self, rect):
+        """Capture, question, analyze, display, and store a selected region."""
+        if self.screen_vision is None or self.vision_service is None:
+            self.output.append(
+                "<i>Region analysis is unavailable because vision is not configured.</i>"
+            )
+            return
+
+        if not isinstance(rect, QRect) or rect.width() < 2 or rect.height() < 2:
+            self.output.append("<i>The selected region is too small.</i>")
+            return
+
+        # The selection has ended, so remove the overlay before capturing.
+        self.region_overlay.reset()
+
+        # Ask the user what they want to know about the selected region.
+        question, accepted = QInputDialog.getText(
+            self,
+            "SHADOW — Ask about this region",
+            "Ask about this...",
+            text="What is this?",
+        )
+
+        if not accepted:
+            self.output.append("<i>Region analysis cancelled.</i>")
+            return
+
+        question = (question or "").strip() or "What is this?"
+
+        # Re-check the foreground window and existing privacy restrictions.
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+
+            window = ActiveWindowSource().sample() or {}
+        except Exception:
+            window = {}
+
+        process_name = str(window.get("process", ""))
+        window_title = str(window.get("title", ""))
+
+        try:
+            profile = self.screen_vision.classifier.classify(
+                process=process_name,
+                title=window_title,
+            )
+            if profile.is_self:
+                self.output.append(
+                    "<i>Region analysis was blocked for SHADOW's own window.</i>"
+                )
+                return
+
+            if self.screen_vision._is_sensitive(window):
+                self.output.append(
+                    "<i>Region analysis was blocked because this window is sensitive.</i>"
+                )
+                return
+
+            if (
+                self.screen_vision.exclusions is not None
+                and self.screen_vision.exclusions.is_excluded(process_name)
+            ):
+                self.output.append("<i>Vision is disabled for this application.</i>")
+                return
+
+        except Exception:
+            # Fail closed: if privacy classification cannot be completed,
+            # do not capture or send the selected region.
+            self.output.append(
+                "<i>Region analysis was blocked because privacy checks failed.</i>"
+            )
+            return
+
+        # Capture only the selected rectangle. The overlay has already hidden.
+        # all_screens=True supports virtual-desktop coordinates on Windows.
+        try:
+            with Image.open(io.BytesIO()) as _unused:
+                pass
+        except Exception:
+            # This block is intentionally not used for capture; actual capture
+            # is performed below using ImageGrab.
+            pass
+
+        try:
+            from PIL import ImageGrab
+
+            with ImageGrab.grab(
+                bbox=(
+                    rect.left(),
+                    rect.top(),
+                    rect.right() + 1,
+                    rect.bottom() + 1,
+                ),
+                all_screens=True,
+            ) as cropped:
+                if cropped.width < 2 or cropped.height < 2:
+                    raise ValueError("The captured region is empty.")
+
+                # Bound image dimensions before encoding to avoid oversized
+                # requests. The original full-screen buffer is never retained.
+                max_side = int(
+                    (self.config.get("vision") or {}).get("image_max_side", 1024)
+                )
+                max_side = max(128, max_side)
+
+                if max(cropped.size) > max_side:
+                    cropped.thumbnail(
+                        (max_side, max_side),
+                        Image.Resampling.LANCZOS,
+                    )
+
+                image_buffer = io.BytesIO()
+                cropped.convert("RGB").save(image_buffer, format="JPEG", quality=90)
+                image_bytes = image_buffer.getvalue()
+
+        except Exception as exc:  # noqa: BLE001
+            self.output.append(f"<i>Could not capture the selected region: {exc}</i>")
+            return
+
+        finally:
+            # Keep only the encoded crop needed by the worker.
+            # No image file is created or persisted.
+            try:
+                del cropped
+            except UnboundLocalError:
+                pass
+
+        vision_cfg = self.config.get("vision") or {}
+        max_bytes = int(vision_cfg.get("image_max_bytes", 10 * 1024 * 1024))
+
+        if len(image_bytes) > max_bytes:
+            self.output.append(
+                "<i>The selected region is too large to process. "
+                "Select a smaller area.</i>"
+            )
+            return
+
+        metadata = {
+            "title": window_title,
+            "process": process_name,
+            "is_sensitive": False,
+            "source": "region_capture",
+        }
+
+        # Use the existing Commit 17 preview/consent path before cloud upload.
+        # Local analysis remains available if the user chooses Local.
+        local_only = False
+        authorized = False
+
+        decision = self._approve_vision_cloud_upload(
+            image_bytes=image_bytes,
+            window_title=window_title,
+            process_name=process_name,
+            window_metadata=metadata,
+        )
+
+        if decision == "cancel":
+            self.output.append("<i>Region analysis cancelled.</i>")
+            return
+
+        if decision == "local":
+            local_only = True
+        elif decision == "cloud":
+            authorized = True
+
+        self.output.append(f"<b>Analyzing selected region:</b> {question}")
+
+        # Use the same router used by normal screen vision.
+        service = self.vision_router or self.vision_service
+
+        worker = RegionAnalysisWorker(
+            service,
+            image_bytes,
+            question,
+            authorized=authorized,
+            window_metadata=metadata,
+            local_only=local_only,
+            parent=self,
+        )
+
+        # Keep a strong reference until QThread finishes.
+        self._region_analysis_worker = worker
+
+        worker.succeeded.connect(
+            lambda answer, q=question, title=window_title, process=process_name: self._on_region_analysis_succeeded(
+                q, answer, title, process
+            )
+        )
+        worker.failed.connect(self._on_region_analysis_failed)
+        worker.finished.connect(self._on_region_analysis_finished)
+        worker.start()
+
+    def _on_region_analysis_succeeded(
+        self,
+        question: str,
+        answer: str,
+        window_title: str,
+        process_name: str,
+    ):
+        """Display the answer and persist the text-only observation."""
+        self.output.append(
+            "<b>Region analysis</b><br>"
+            f"<b>Question:</b> {self._escape_html(question)}<br>"
+            f"<b>Answer:</b> {self._escape_html(answer)}"
+        )
+
+        try:
+            from shadow.memory.images import ImageObservationStore
+
+            store = ImageObservationStore(self.memory)
+            observation_id = store.record_region_capture(
+                question=question,
+                answer=answer,
+                window_title=window_title,
+                process=process_name,
+            )
+
+            if observation_id is None:
+                self.output.append(
+                    "<i>Answer displayed, but saving the observation failed.</i>"
+                )
+            else:
+                self.output.append(
+                    f"<i>Saved region observation #{observation_id}.</i>"
+                )
+
+        except Exception as exc:  # noqa: BLE001
+            self.output.append(
+                f"<i>Answer displayed, but saving failed: "
+                f"{self._escape_html(str(exc))}</i>"
+            )
+
+    def _on_region_analysis_failed(self, message: str):
+        """Show a recoverable analysis error."""
+        self.output.append(
+            "<i>Region analysis failed: " f"{self._escape_html(message)}</i>"
+        )
+
+    def _on_region_analysis_finished(self):
+        """Release the worker reference after completion."""
+        self._region_analysis_worker = None
+
+    @staticmethod
+    def _escape_html(value: str) -> str:
+        """Escape untrusted text before inserting it into QTextEdit HTML."""
+        import html
+
+        return html.escape(str(value))
+
+    def _on_region_capture_cancelled(self):
+        """Report cancellation without capturing or storing any image."""
+        self.output.append("<i>Region selection cancelled.</i>")
+
+    def _ensure_vision_consent(self) -> bool:
+        """Return True if the user has accepted vision consent.
+
+        Shows the first-use dialog if not yet accepted.
+        """
+        if self.vision_consent is None:
+            return True
+        if self.vision_consent.is_accepted():
+            return True
+
+        dlg = VisionConsentDialog(self)
+        dlg.exec()
+        if not dlg.accepted_choice:
+            self.output.append("<i>Vision not enabled. You can try again later.</i>")
+            return False
+
+        self.vision_consent.accept()
+        try:
+            self.memory.log_activity("vision_consent", "first-use consent accepted")
+        except Exception:
+            pass
+        return True
+
+    def open_vision_cloud_settings(self):
+        """Open the dialog used to configure vision cloud providers."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Vision Cloud Settings")
+        dlg.resize(560, 620)
+
+        layout = QVBoxLayout(dlg)
+
+        panel = VisionCloudSettingsPanel(self.config, self.memory)
+        panel.settings_changed.connect(self._on_vision_cloud_settings_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def _on_vision_cloud_settings_changed(self):
+        """Refresh the vision UI after vision-cloud settings are saved."""
+        self.output.append(
+            "<i>Vision Cloud settings saved. Restart SHADOW if required "
+            "for provider changes to take effect.</i>"
+        )
+
+    def _approve_vision_cloud_upload(
+        self,
+        image_bytes: bytes,
+        window_title: str,
+        process_name: str,
+        window_metadata: dict,
+    ) -> str:
+        """Request per-window approval before a cloud vision upload."""
+
+        vision_cfg = self.config.get("vision") or {}
+        cloud_cfg = vision_cfg.get("cloud") or {}
+
+        # Local-first default: never initiate a cloud upload if disabled.
+        if not cloud_cfg.get("enabled", False):
+            return "local"
+
+        # Consent must be checked before showing a cloud approval dialog.
+        try:
+            if not self.memory.get_consent("vision_cloud"):
+                return "local"
+        except Exception:
+            return "local"
+
+        # Sensitive windows are blocked before any preview can authorize upload.
+        if window_metadata.get("is_sensitive", False):
+            return "local"
+
+        if not cloud_cfg.get("require_preview", True):
+            return "cloud"
+
+        providers = cloud_cfg.get("providers") or []
+        provider_name = str(providers[0]) if providers else "configured provider"
+
+        dlg = VisionCloudPreviewDialog(
+            image_bytes=image_bytes,
+            window_title=window_title,
+            process_name=process_name,
+            provider_name=provider_name,
+            parent=self,
+        )
+        dlg.exec()
+
+        if dlg.decision == VisionCloudDecision.SEND_TO_CLOUD:
+            return "cloud"
+
+        if dlg.decision == VisionCloudDecision.USE_LOCAL:
+            return "local"
+
+        return "cancel"
+
+    # ---------- menu (NEW in Commit 3) ----------
+
+    def _build_menu(self):
+        menu = self.menuBar()
+        settings_menu = menu.addMenu("Settings")
+
+        consent_action = settings_menu.addAction("Consent…")
+        consent_action.triggered.connect(self.open_consent_panel)
+
+        privacy_action = settings_menu.addAction("Privacy Dashboard…")
+        privacy_action.triggered.connect(self.open_privacy_dashboard)
+
+        insights_action = settings_menu.addAction("Insights…")
+        insights_action.triggered.connect(self.open_insights_panel)
+
+        ambient_action = settings_menu.addAction("Working On…")
+        ambient_action.triggered.connect(self.open_ambient_panel)
+
+        diagnostics_action = settings_menu.addAction("Diagnostics…")
+        diagnostics_action.triggered.connect(self.open_diagnostics_panel)
+
+        cloud_action = settings_menu.addAction("Cloud LLM…")
+        cloud_action.triggered.connect(self.open_cloud_panel)
+
+        vision_action = settings_menu.addAction("Offer vision now")
+        vision_action.triggered.connect(self._run_vision_now)
+
+        vision_cloud_action = settings_menu.addAction("Vision Cloud…")
+        vision_cloud_action.triggered.connect(self.open_vision_cloud_settings)
+
+        excl_action = settings_menu.addAction("Vision exclusions…")
+        excl_action.triggered.connect(self.open_vision_exclusions)
+
+        hotkey_action = settings_menu.addAction("Vision active window (Ctrl+Shift+V)")
+        hotkey_action.triggered.connect(self._run_vision_now)
+
+        dnd_action = settings_menu.addAction("Do Not Disturb")
+        dnd_action.setCheckable(True)
+        dnd_action.setChecked(self.dnd.enabled)
+        dnd_action.triggered.connect(self._on_dnd_toggle)
+        self._dnd_menu_action = dnd_action
+
+        search_menu = menu.addMenu("Search")
+        search_action = search_menu.addAction("Search Observations…")
+        search_action.triggered.connect(self.open_search_panel)
+
+    def open_consent_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Consent")
+        dlg.resize(560, 640)
+        layout = QVBoxLayout(dlg)
+
+        panel = ConsentPanel(self.memory, self.config)
+        panel.consent_changed.connect(self._on_consent_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def open_privacy_dashboard(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Privacy Dashboard")
+        dlg.resize(640, 520)
+        layout = QVBoxLayout(dlg)
+
+        dash = PrivacyDashboard(self.memory, self.backend)
+        layout.addWidget(dash)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+
+    def open_insights_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Insights")
+        dlg.resize(560, 620)
+        layout = QVBoxLayout(dlg)
+        panel = InsightPanel(
+            engines=[
+                self.clipboard_actions,
+                self.intent_notes,
+                self.stuck_detector,
+                self.focus_patterns,
+                self.recurring_patterns,
+                self.recovery_engine,
+                self.forecasting_engine,
+                self.decay_engine,
+            ],
+            focus_shield=self.focus_shield,
+            feedback=self.feedback,
+        )
+        layout.addWidget(panel)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_ambient_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Working On")
+        dlg.resize(560, 620)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(AmbientPanel(self.ambient_tasks))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_diagnostics_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Diagnostics")
+        dlg.resize(720, 640)
+        layout = QVBoxLayout(dlg)
+
+        observer = getattr(self, "observer", None)
+        panel = DiagnosticsPanel(
+            self.backend,
+            self.memory,
+            self.config,
+            observer=observer,
+            feedback=self.feedback,
+        )
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_cloud_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Cloud LLM")
+        dlg.resize(640, 720)
+        layout = QVBoxLayout(dlg)
+
+        panel = CloudPanel(self.config, backend=self.backend)
+        panel.settings_changed.connect(self._on_cloud_changed)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_vision_exclusions(self):
+        from shadow.ui.vision_exclusions_panel import VisionExclusionsPanel
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Vision exclusions")
+        dlg.resize(520, 480)
+        layout = QVBoxLayout(dlg)
+
+        panel = VisionExclusionsPanel(self.vision_exclusions)
+        layout.addWidget(panel)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec()
+        try:
+            self.indicator.refresh()
+        except Exception:
+            pass
+
+    def _on_cloud_changed(self):
+        # Note: a full restart is required for backend swap to take effect.
+        # Show a subtle hint in the chat output.
+        try:
+            self.output.append(
+                "<i>Cloud settings saved. Restart SHADOW for backend "
+                "changes to take effect.</i>"
+            )
+        except Exception:
+            pass
+
+    def open_search_panel(self):
+        dlg = QDialog(self)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Search")
+        dlg.resize(720, 640)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(SearchPanel(self.memory))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def _on_consent_changed(self, channel: str, enabled: bool):
+        self.memory.log_activity(
+            "consent_change", f"{channel}={'on' if enabled else 'off'}"
+        )
+        self.indicator.refresh()
+
+    def _on_mode_changed(self, mode: str):
+        if self.observer is not None:
+            self.observer.set_mode(mode)
+        self.memory.log_activity("mode_change", mode)
+
+    # ---------- observer lifecycle ----------
+
+    def _start_observer(self):
+        from shadow.config import perception_config
+
+        pcfg = perception_config(self.config)
+        if not pcfg.get("enabled", True):
+            self.observer_status.setText("Observer: disabled in config")
+            return
+        self.observer = ObservationWorker(
+            self.memory,
+            self.backend,
+            self.config,
+            vision_service=self.vision_service,
+        )
+        self.observer.tick.connect(self._on_observer_tick)
+        self.observer.observation.connect(self._on_observer_observation)
+        self.observer.skipped.connect(self._on_observer_skipped)
+        self.observer.error.connect(self._on_observer_error)
+        self.observer.start()
+        self.observer.visual_content_maybe.connect(self._on_visual_content_maybe)
+        self.observer_status.setText("Observer: starting…")
+        self.memory.log_activity("observer_start", "observer loop started")
+
+    def _on_observer_tick(self, count: int):
+        self.observer_status.setText(f"Observer: tick {count}")
+
+    def _on_observer_observation(self, source: str, preview: str):
+        self.observer_status.setText(f"Observer: recorded from {source}")
+        self.memory.log_activity("observation", f"{source}: {preview[:80]}")
+
+    def _on_observer_skipped(self, reason: str, detail: str):
+        self.observer_status.setText(f"Observer: skipped ({reason})")
+
+    def _on_observer_error(self, message: str):
+        self.observer_status.setText(f"Observer error: {message[:80]}")
+        self.memory.log_activity("observer_error", message[:120])
+
+    def _refresh_route_chip(self):
+        """Update the route chip based on backend info."""
+        try:
+            info = self.backend.info if hasattr(self.backend, "info") else {}
+        except Exception:
+            info = {}
+
+        backend_name = info.get("backend", "cpu")
+        route = info.get("route", "local")
+        online = info.get("online")
+
+        if backend_name == "hybrid":
+            if not online:
+                text, color, bg = "Route: Local (offline)", "#fff", "#e67e22"
+            elif route == "cloud":
+                text, color, bg = "Route: Cloud", "#fff", "#2ecc71"
+            elif route == "local_fallback":
+                text, color, bg = "Route: Local (fallback)", "#fff", "#e74c3c"
+            elif route == "local_offline":
+                text, color, bg = "Route: Local", "#333", "#ddd"
+            else:
+                text, color, bg = "Route: —", "#333", "#eee"
+        else:
+            text, color, bg = "Route: Local (CPU)", "#333", "#ddd"
+
+        self.route_chip.setText(text)
+        self.route_chip.setStyleSheet(
+            f"padding: 2px 8px; border-radius: 8px; "
+            f"background-color: {bg}; color: {color}; font-size: 11px;"
+        )
+
+    def _on_quick_capture(self, path: str):
+        try:
+            if hasattr(self, "tray"):
+                self.tray.tray.showMessage(
+                    "SHADOW — Captured",
+                    path,
+                )
+        except Exception:
+            pass
+        try:
+            self.memory.log_activity("quick_capture", path)
+        except Exception:
+            pass
+
+    def _on_visual_content_maybe(self, payload: dict):
+        if self.screen_vision is None:
+            return
+        if not self.vision_offer_policy.should_offer(
+            payload.get("process", ""),
+            payload.get("category", ""),
+        ):
+            return
+        self._pending_vision_offer = payload
+        self.vision_popup.show_for(payload)
+
+    def _on_vision_choice(self, choice: str):
+        process = self._pending_vision_offer.get("process", "")
+        try:
+            self.vision_offer_policy.record(process, choice)
+        except Exception:
+            pass
+
+        if choice == "yes":
+            self._run_vision_now()
+
+    def _run_vision_now(self):
+        if self.screen_vision is None:
+            self.output.append(
+                "<i>Vision is not available. Enable it in Settings → Vision.</i>"
+            )
+            return
+
+        if not self._ensure_vision_consent():
+            return
+
+        # Check if the active window is excluded before attempting to sample
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+
+            window = ActiveWindowSource().sample()
+            if window and self.screen_vision.exclusions:
+                if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
+                    self.output.append(
+                        "<i>Vision is disabled for this application.</i>"
+                    )
+                    return
+        except Exception:
+            pass
+
+        self.output.append("<i>Analyzing current window…</i>")
+        self.indicator.set_vision_active(True)
+        try:
+            result = self.screen_vision.sample(task="caption", authorized=True)
+        finally:
+            self.indicator.set_vision_active(False)
+        if not result:
+            self.output.append(
+                "<i>Vision returned no result "
+                "(sensitive window, empty content, or model unavailable).</i>"
+            )
+            return
+
+        self.output.append(f"<b>Vision:</b> {result['text']}")
+
+        try:
+            from shadow.memory import ImageObservationStore
+
+            store = ImageObservationStore(self.memory)
+            store.record_screen_vision(
+                text=result.get("text", ""),
+                window_title=result.get("window_title", ""),
+                process=result.get("process", ""),
+                task=result.get("task", "caption"),
+            )
+        except Exception:
+            pass
+
+        try:
+            self.memory.log_activity(
+                "vision_caption",
+                f"{result.get('process', '')}: {result['text'][:80]}",
+            )
+        except Exception:
+            pass
+
+    # ---------- query flow ----------
+
+    def send_query(self):
+        try:
+            self._send_query_inner()
+        except Exception:
+            import traceback
+
+            tb = traceback.format_exc()
+            print(tb, file=sys.stderr)
+            self.output.append(f"<b style='color:red'>Exception:</b><pre>{tb}</pre>")
+
+    def _send_query_inner(self):
+        if self._shutting_down:
+            return
+        if self.worker is not None and self.worker.isRunning():
+            return
+        prompt = self.input.text().strip()
+        if not prompt:
+            return
+        self.input.clear()
+
+        try:
+            self.taint.remember_user_input(prompt)
+        except Exception:
+            pass
+
+        vision_augmented, vision_fired = self._maybe_augment_with_vision(prompt)
+        if vision_fired:
+            augmented = vision_augmented
+            self.output.append("<i>Looking at your screen…</i>")
+        else:
+            augmented = self._build_prompt_with_context(prompt)
+
+        self.output.append(f"<b>You:</b> {prompt}")
+        self.output.append("<b>Shadow:</b> ")
+
+        mode = self.mode_combo.currentText()
+        max_tokens = self.config["modes"][mode]["model_max_tokens"]
+
+        self.worker = InferenceWorker(self.backend, augmented, max_tokens)
+        self.worker.chunk.connect(self.on_chunk)
+        self.worker.done.connect(self.on_done)
+        self.worker.failed.connect(self.on_error)
+        self.worker.start()
+
+    def on_chunk(self, text: str):
+        cursor = self.output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.output.setTextCursor(cursor)
+        self.output.ensureCursorVisible()
+
+    def on_done(self):
+        if self._shutting_down:
+            return
+        self.output.append("")
+        self.memory.log_activity("query", "completed")
+        self._refresh_route_chip()
+
+    def on_error(self, message: str):
+        if self._shutting_down:
+            return
+        self.output.append(f"<b style='color:red'>Error:</b> {message}")
+        self.memory.log_activity("error", message[:120])
+        self._refresh_route_chip()
+
+    def wipe_shadow(self):
+        self.memory.wipe()
+        self.output.append("<b>Shadow:</b> All local memory wiped.")
+        self.memory.log_activity("wipe", "Full Shadow wipe executed")
+
+    def _build_prompt_with_context(self, user_prompt: str) -> str:
+        observations = []
+        try:
+            observations = self.retriever.semantic(user_prompt, k=3)
+        except Exception:
+            observations = []
+
+        session_extra = ""
+        try:
+            current = self.session_memory.current_session()
+            if current is not None:
+                session_extra = self.session_memory.resume_summary(current)
+        except Exception:
+            session_extra = ""
+
+        temporal_extra = ""
+        for window in ("last month", "yesterday", "last week", "today"):
+            if window in user_prompt.lower():
+                try:
+                    temporal = self.retriever.temporal(window)
+                except Exception:
+                    temporal = []
+                if temporal:
+                    lines = [
+                        f"- [{o['timestamp']}] {o['content'][:150]}"
+                        for o in temporal[:5]
+                    ]
+                    temporal_extra = f"Observations from {window}:\n" + "\n".join(lines)
+                break
+
+        combined_extra = "\n\n".join(
+            part for part in (session_extra, temporal_extra) if part
+        )
+        return self.prompt_builder.build(
+            user_query=user_prompt,
+            observations=observations,
+            extra_context=combined_extra,
+        )
+
+    def _build_memory_context(self, user_prompt: str) -> str:
+        """Build a memory-only context block (no vision, no user question)."""
+        try:
+            observations = self.retriever.semantic(user_prompt, k=3)
+        except Exception:
+            observations = []
+
+        lines: list[str] = []
+        for obs in observations:
+            content = (obs.get("content") or "").strip()
+            if len(content) < 25:
+                continue
+            lines.append(
+                f"- [{obs.get('timestamp', '')}] "
+                f"({obs.get('source', '')}) {content[:150]}"
+            )
+
+        # Add temporal results if a time keyword is present.
+        for window in ("last month", "yesterday", "last week", "today"):
+            if window in user_prompt.lower():
+                try:
+                    temporal = self.retriever.temporal(window)
+                except Exception:
+                    temporal = []
+                for obs in temporal[:5]:
+                    content = (obs.get("content") or "").strip()
+                    if len(content) < 25:
+                        continue
+                    lines.append(
+                        f"- [{obs.get('timestamp', '')}] "
+                        f"({obs.get('source', '')}) {content[:150]}"
+                    )
+                break
+
+        if not lines:
+            return ""
+        return "Relevant past observations:\n" + "\n".join(lines)
+
+    def _maybe_augment_with_vision(self, user_prompt: str) -> tuple[str, bool]:
+        """Detect visual intent and run vision if matched.
+
+        Returns (augmented_prompt, vision_fired).
+        """
+        intent = detect_intent(user_prompt)
+        if intent is None:
+            return user_prompt, False
+
+        if self.screen_vision is None:
+            return user_prompt, False
+
+        if not self._ensure_vision_consent():
+            return user_prompt, False
+
+        self.indicator.set_vision_active(True)
+        try:
+            result = self.screen_vision.sample(
+                task=intent.task,
+                prompt=intent.prompt,
+                authorized=True,
+            )
+        except Exception:
+            result = None
+        finally:
+            self.indicator.set_vision_active(False)
+
+        # Persist if we got a result (best-effort)
+        if result is not None:
+            try:
+                from shadow.memory import ImageObservationStore
+
+                store = ImageObservationStore(self.memory)
+                store.record_screen_vision(
+                    text=result.get("text", ""),
+                    window_title=result.get("window_title", ""),
+                    process=result.get("process", ""),
+                    task=result.get("task", "caption"),
+                )
+            except Exception:
+                pass
+
+        vision_context = build_vision_context(intent, result)
+
+        # If the query also asks about past context, merge memory retrieval.
+        memory_context = ""
+        if wants_memory_context(user_prompt):
+            try:
+                memory_context = self._build_memory_context(user_prompt)
+            except Exception:
+                memory_context = ""
+
+        combined = build_combined_context(vision_context, memory_context)
+        augmented = f"{combined}\n\nUser question: {user_prompt}"
+        return augmented, True
+
+    # ---------- graceful shutdown ----------
+
+    def closeEvent(self, event: QCloseEvent):
+        if not self._full_shutdown:
+            # Minimize to tray. SHADOW keeps observing.
+            event.ignore()
+            self.hide()
+            if hasattr(self, "tray"):
+                self.tray.show_minimize_hint()
+            return
+
+        self._shutting_down = True
+
+        # Stop observer
+        if self.observer is not None and self.observer.isRunning():
+            self.observer.stop()
+            if not self.observer.wait(3000):
+                print("[shadow] observer did not stop within 3 s")
+
+        if hasattr(self, "vision_hotkeys") and self.vision_hotkeys is not None:
+            self.vision_hotkeys.stop()
+
+        self.region_overlay.hide()
+
+        # Stop quick capture hotkey listener
+        if hasattr(self, "quick_capture"):
+            self.quick_capture.stop()
+
+        # Stop inference worker
+        worker = self.worker
+        if worker is not None and worker.isRunning():
+            worker.requestInterruption()
+            if not worker.wait(3000):
+                print("[shadow] worker did not stop within 3 s")
+
+        try:
+            self.memory.log_activity("app_stop", "SHADOW closed")
+        finally:
+            self.memory.close()
+
+        if hasattr(self, "tray"):
+            self.tray.hide()
+
+        event.accept()

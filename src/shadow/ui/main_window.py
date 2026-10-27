@@ -1,11 +1,14 @@
+import io
 import sys
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PIL import Image
+from PySide6.QtCore import QRect, Qt, QThread, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,  # NEW in Commit 3
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -47,6 +50,7 @@ from shadow.perception import (
     ScreenVisionSource,
     VisionHotkeys,
 )
+from shadow.perception.region_analysis import RegionAnalysisWorker
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
@@ -306,19 +310,49 @@ class MainWindow(QMainWindow):
         if not self._ensure_vision_consent():
             return
 
-        # Check if the active window is excluded before attempting to open the overlay
+        # Preserve the target window before the overlay takes focus.
         try:
             from shadow.perception.active_window import ActiveWindowSource
 
-            window = ActiveWindowSource().sample()
-            if window and self.screen_vision.exclusions:
-                if self.screen_vision.exclusions.is_excluded(window.get("process", "")):
-                    self.output.append(
-                        "<i>Vision is disabled for this application.</i>"
-                    )
-                    return
+            window = ActiveWindowSource().sample() or {}
+            self._region_capture_target_window = dict(window)
+
+            process_name = str(window.get("process", ""))
+            window_title = str(window.get("title", ""))
+
+            profile = self.screen_vision.classifier.classify(
+                process=process_name,
+                title=window_title,
+            )
+
+            if profile.is_self:
+                self.output.append(
+                    "<i>Region capture cannot target SHADOW's own window.</i>"
+                )
+                self._region_capture_target_window = None
+                return
+
+            if self.screen_vision._is_sensitive(window):
+                self.output.append(
+                    "<i>Region capture is disabled for sensitive windows.</i>"
+                )
+                self._region_capture_target_window = None
+                return
+
+            if (
+                self.screen_vision.exclusions is not None
+                and self.screen_vision.exclusions.is_excluded(process_name)
+            ):
+                self.output.append("<i>Vision is disabled for this application.</i>")
+                self._region_capture_target_window = None
+                return
+
         except Exception:
-            pass
+            self._region_capture_target_window = None
+            self.output.append(
+                "<i>Region capture was blocked because privacy checks failed.</i>"
+            )
+            return
 
         self.output.append(
             "<i>Select a screen region by dragging. Press Esc to cancel.</i>"
@@ -326,16 +360,247 @@ class MainWindow(QMainWindow):
         self.region_overlay.begin_selection()
 
     def _on_region_selected(self, rect):
-        """Handle a completed region selection.
+        """Capture, question, analyze, display, and store a selected region."""
+        if self.screen_vision is None or self.vision_service is None:
+            self.output.append(
+                "<i>Region analysis is unavailable because vision is not configured.</i>"
+            )
+            return
 
-        This commit establishes the UI and signal path only. Screenshot capture
-        and VLM inference will be added in the next region-capture step.
-        """
-        self.output.append(
-            "<i>Region selected: "
-            f"{rect.width()} × {rect.height()} pixels. "
-            "Region analysis will be connected in the next step.</i>"
+        if not isinstance(rect, QRect) or rect.width() < 2 or rect.height() < 2:
+            self.output.append("<i>The selected region is too small.</i>")
+            return
+
+        # The selection has ended, so remove the overlay before capturing.
+        self.region_overlay.reset()
+
+        # Ask the user what they want to know about the selected region.
+        question, accepted = QInputDialog.getText(
+            self,
+            "SHADOW — Ask about this region",
+            "Ask about this...",
+            text="What is this?",
         )
+
+        if not accepted:
+            self.output.append("<i>Region analysis cancelled.</i>")
+            return
+
+        question = (question or "").strip() or "What is this?"
+
+        # Use the window captured before the overlay took focus.
+        window = getattr(self, "_region_capture_target_window", None)
+        self._region_capture_target_window = None
+
+        if not window:
+            self.output.append(
+                "<i>Region analysis was blocked because the target window "
+                "could not be verified.</i>"
+            )
+            return
+
+        process_name = str(window.get("process", ""))
+        window_title = str(window.get("title", ""))
+
+        try:
+            profile = self.screen_vision.classifier.classify(
+                process=process_name,
+                title=window_title,
+            )
+
+            if profile.is_self:
+                self.output.append(
+                    "<i>Region analysis was blocked for SHADOW's own window.</i>"
+                )
+                return
+
+            if self.screen_vision._is_sensitive(window):
+                self.output.append(
+                    "<i>Region analysis was blocked because this window is sensitive.</i>"
+                )
+                return
+
+            if (
+                self.screen_vision.exclusions is not None
+                and self.screen_vision.exclusions.is_excluded(process_name)
+            ):
+                self.output.append("<i>Vision is disabled for this application.</i>")
+                return
+
+        except Exception:
+            self.output.append(
+                "<i>Region analysis was blocked because privacy checks failed.</i>"
+            )
+            return
+
+        # Capture only the selected rectangle. The overlay has already hidden.
+        # all_screens=True supports virtual-desktop coordinates on Windows.
+
+        try:
+            from PIL import ImageGrab
+
+            with ImageGrab.grab(
+                bbox=(
+                    rect.left(),
+                    rect.top(),
+                    rect.right() + 1,
+                    rect.bottom() + 1,
+                ),
+                all_screens=True,
+            ) as cropped:
+                if cropped.width < 2 or cropped.height < 2:
+                    raise ValueError("The captured region is empty.")
+
+                # Bound image dimensions before encoding to avoid oversized
+                # requests. The original full-screen buffer is never retained.
+                max_side = int(
+                    (self.config.get("vision") or {}).get("image_max_side", 1024)
+                )
+                max_side = max(128, max_side)
+
+                if max(cropped.size) > max_side:
+                    cropped.thumbnail(
+                        (max_side, max_side),
+                        Image.Resampling.LANCZOS,
+                    )
+
+                image_buffer = io.BytesIO()
+                cropped.convert("RGB").save(image_buffer, format="JPEG", quality=90)
+                image_bytes = image_buffer.getvalue()
+
+        except Exception as exc:  # noqa: BLE001
+            self.output.append(f"<i>Could not capture the selected region: {exc}</i>")
+            return
+
+        finally:
+            # Keep only the encoded crop needed by the worker.
+            # No image file is created or persisted.
+            try:
+                del cropped
+            except UnboundLocalError:
+                pass
+
+        vision_cfg = self.config.get("vision") or {}
+        max_bytes = int(vision_cfg.get("image_max_bytes", 10 * 1024 * 1024))
+
+        if len(image_bytes) > max_bytes:
+            self.output.append(
+                "<i>The selected region is too large to process. "
+                "Select a smaller area.</i>"
+            )
+            return
+
+        metadata = {
+            "title": window_title,
+            "process": process_name,
+            "is_sensitive": False,
+            "source": "region_capture",
+        }
+
+        # Use the existing Commit 17 preview/consent path before cloud upload.
+        # Local analysis remains available if the user chooses Local.
+        local_only = False
+        authorized = False
+
+        decision = self._approve_vision_cloud_upload(
+            image_bytes=image_bytes,
+            window_title=window_title,
+            process_name=process_name,
+            window_metadata=metadata,
+        )
+
+        if decision == "cancel":
+            self.output.append("<i>Region analysis cancelled.</i>")
+            return
+
+        if decision == "local":
+            local_only = True
+        elif decision == "cloud":
+            authorized = True
+
+        self.output.append(f"<b>Analyzing selected region:</b> {question}")
+
+        # Use the same router used by normal screen vision.
+        service = self.vision_router or self.vision_service
+
+        worker = RegionAnalysisWorker(
+            service,
+            image_bytes,
+            question,
+            authorized=authorized,
+            window_metadata=metadata,
+            local_only=local_only,
+            parent=self,
+        )
+
+        # Keep a strong reference until QThread finishes.
+        self._region_analysis_worker = worker
+
+        worker.succeeded.connect(
+            lambda answer, q=question, title=window_title, process=process_name: self._on_region_analysis_succeeded(
+                q, answer, title, process
+            )
+        )
+        worker.failed.connect(self._on_region_analysis_failed)
+        worker.finished.connect(self._on_region_analysis_finished)
+        worker.start()
+
+    def _on_region_analysis_succeeded(
+        self,
+        question: str,
+        answer: str,
+        window_title: str,
+        process_name: str,
+    ):
+        """Display the answer and persist the text-only observation."""
+        self.output.append(
+            "<b>Region analysis</b><br>"
+            f"<b>Question:</b> {self._escape_html(question)}<br>"
+            f"<b>Answer:</b> {self._escape_html(answer)}"
+        )
+
+        try:
+            from shadow.memory.images import ImageObservationStore
+
+            store = ImageObservationStore(self.memory)
+            observation_id = store.record_region_capture(
+                question=question,
+                answer=answer,
+                window_title=window_title,
+                process=process_name,
+            )
+
+            if observation_id is None:
+                self.output.append(
+                    "<i>Answer displayed, but saving the observation failed.</i>"
+                )
+            else:
+                self.output.append(
+                    f"<i>Saved region observation #{observation_id}.</i>"
+                )
+
+        except Exception as exc:  # noqa: BLE001
+            self.output.append(
+                f"<i>Answer displayed, but saving failed: "
+                f"{self._escape_html(str(exc))}</i>"
+            )
+
+    def _on_region_analysis_failed(self, message: str):
+        """Show a recoverable analysis error."""
+        self.output.append(
+            "<i>Region analysis failed: " f"{self._escape_html(message)}</i>"
+        )
+
+    def _on_region_analysis_finished(self):
+        """Release the worker reference after completion."""
+        self._region_analysis_worker = None
+
+    @staticmethod
+    def _escape_html(value: str) -> str:
+        """Escape untrusted text before inserting it into QTextEdit HTML."""
+        import html
+
+        return html.escape(str(value))
 
     def _on_region_capture_cancelled(self):
         """Report cancellation without capturing or storing any image."""

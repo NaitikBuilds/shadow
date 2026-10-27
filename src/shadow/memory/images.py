@@ -145,6 +145,40 @@ class ImageObservationStore:
             return None
         return obs_id
 
+    def record_region_capture(
+        self,
+        question: str,
+        answer: str,
+        window_title: str = "",
+        process: str = "",
+    ) -> int | None:
+        """Store a region question and answer without storing the image."""
+        question = (question or "").strip()
+        answer = (answer or "").strip()
+
+        if not question or not answer:
+            return None
+
+        payload = {
+            "question": question,
+            "answer": answer,
+            "window_title": window_title,
+            "process": process,
+        }
+
+        # Store only the text result and metadata. Never store image bytes,
+        # image paths, or base64-encoded image content.
+        content = f"Question: {question}\n\nAnswer: {answer}"
+
+        try:
+            return self.memory.add_observation(
+                "region_capture",
+                content,
+                metadata=json.dumps(payload, ensure_ascii=False, default=str),
+            )
+        except Exception:
+            return None
+
     # ---------- internals ----------
 
     def _row_to_observation(self, row: tuple) -> ImageObservation:

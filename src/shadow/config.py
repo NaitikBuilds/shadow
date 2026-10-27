@@ -424,3 +424,15 @@ def image_files_config(config: dict) -> dict:
     }
     user = (config.get("perception") or {}).get("image_files") or {}
     return {**defaults, **user}
+
+
+def region_capture_config(config: dict) -> dict:
+    """Return region-capture configuration with safe defaults."""
+    defaults = {
+        "enabled": False,
+        "hotkey": "<ctrl>+<shift>+q",
+        "default_prompt": "What is this?",
+        "max_region_mb": 10,
+    }
+    user = (config.get("vision") or {}).get("region_capture") or {}
+    return {**defaults, **user}
