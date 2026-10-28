@@ -1,8 +1,5 @@
 import sqlite3
-import time
-from logging import log
 from pathlib import Path
-from tracemalloc import start
 
 import sqlite_vec
 
@@ -90,23 +87,19 @@ class MemoryStore:
             self.conn.commit()
 
             # ---- Phase 4 (new) ----
+            import logging as _logging
+
+            _log = _logging.getLogger(__name__)
             try:
                 from shadow.memory.wipe_registry import run_all as run_wipe_handlers
 
-                run_wipe_handlers(self._conn, self)
+                run_wipe_handlers(self.conn, self)
             except Exception as exc:  # noqa: BLE001
-                log.warning(
+                _log.warning(
                     "phase4_wipe_failed",
                     extra={"code": "P4_WIPE_FAILED", "error": str(exc)},
                 )
                 raise
-        elapsed = time.perf_counter() - start
-        if elapsed > 5.0:
-            log.warning(
-                "wipe_slow",
-                extra={"code": "WIPE_SLOW", "elapsed_s": round(elapsed, 2)},
-            )
-
         # ---------- knowledge graph ----------
 
     def upsert_entity(self, entity_type: str, name: str) -> int:
