@@ -413,3 +413,38 @@ whitelisted exceptions:
 Everything else remains network-free, enforced by CI.
 
 *Last updated: Phase 3.7 complete.*
+
+## Vision Understanding
+
+SHADOW's vision subsystem extends screen perception with visual analysis of images and selected screen regions.
+
+### Components
+
+* **Vision service:** Exposes the interface used to analyze image input and answer visual queries.
+* **Vision router:** Chooses the configured analysis path, including cloud vision and local fallback where enabled.
+* **Cloud backend and provider pool:** Provide cloud-based visual analysis using configured providers.
+* **Screen vision:** Connects visual understanding with screen perception, window classification, and privacy restrictions.
+* **Region overlay:** Allows the user to select a rectangular screen area.
+* **Region-analysis worker:** Processes the selected crop asynchronously so that analysis does not have to run in the UI callback.
+* **Image observation store:** Persists the textual question and answer associated with a region capture.
+
+### Region-capture flow
+
+1. The user initiates region capture using the configured hotkey.
+2. SHADOW checks vision availability, consent, and the target application's privacy restrictions.
+3. The user selects a screen region.
+4. SHADOW asks what the user wants to know about the selected region.
+5. The selected crop is encoded for analysis.
+6. The applicable vision-consent and cloud-upload approval flow is applied.
+7. The region-analysis worker sends the image and question to the selected analysis service.
+8. SHADOW displays the answer and records a text-only observation.
+
+### Privacy boundaries
+
+* Vision is subject to consent and application exclusions.
+* Sensitive-window and self-window restrictions must remain enforced.
+* Cloud image uploads follow the configured approval path.
+* Local-only analysis is available when supported and selected.
+* Region-capture observations retain textual question-and-answer information rather than the captured image itself.
+
+The actual route used for a query depends on the current vision configuration and the availability of the configured services.

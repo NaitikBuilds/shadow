@@ -1,5 +1,8 @@
 import sqlite3
+import time
+from logging import log
 from pathlib import Path
+from tracemalloc import start
 
 import sqlite_vec
 
@@ -85,6 +88,24 @@ class MemoryStore:
                 DELETE FROM activity_log;
                 """)
             self.conn.commit()
+
+            # ---- Phase 4 (new) ----
+            try:
+                from shadow.memory.wipe_registry import run_all as run_wipe_handlers
+
+                run_wipe_handlers(self._conn, self)
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "phase4_wipe_failed",
+                    extra={"code": "P4_WIPE_FAILED", "error": str(exc)},
+                )
+                raise
+        elapsed = time.perf_counter() - start
+        if elapsed > 5.0:
+            log.warning(
+                "wipe_slow",
+                extra={"code": "WIPE_SLOW", "elapsed_s": round(elapsed, 2)},
+            )
 
         # ---------- knowledge graph ----------
 
@@ -340,6 +361,19 @@ class MemoryStore:
             (channel, "enable" if enabled else "disable", reason),
         )
         self.conn.commit()
+
+    def ensure_consent(self, channel: str, granted: bool = False) -> bool:
+        """Insert a consent channel with a default grant if it doesn't exist.
+
+        Does not overwrite an existing row (INSERT OR IGNORE).
+        Returns True if the channel was newly inserted.
+        """
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO consents(channel, granted) VALUES (?, ?)",
+            (channel, int(granted)),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def get_consent(self, channel: str) -> bool:
         cur = self.conn.cursor()

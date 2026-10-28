@@ -8,10 +8,11 @@ Runs at startup (at most once per configured interval). Handles:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from shadow.config import retention_config
+from shadow.memory.retention_registry import all_policies
 
 log = logging.getLogger("shadow.retention")
 
@@ -202,3 +203,51 @@ class RetentionPolicy:
         if deleted:
             log.info("Deleted %d old error logs", deleted)
         return deleted
+
+
+def prune_all(conn, now_epoch=None):
+    """Delete rows older than each registered retention policy.
+
+    Returns {table: rows_deleted}. Policies with days=None are skipped.
+    Runs in a single transaction; any failure rolls back.
+    """
+    import sqlite3
+
+    if now_epoch is None:
+        now_epoch = int(datetime.now(UTC).timestamp())
+
+    deleted = {}
+    try:
+        with conn:
+            for p in all_policies():
+                if p.days is None:
+                    continue
+                # Skip tables whose migration hasn't landed yet. Feature
+                # tables appear progressively; a retention pass over an old
+                # schema must not raise.
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    (p.table,),
+                ).fetchone()
+                if not exists:
+                    log.debug(
+                        "retention_skip_missing_table",
+                        extra={"table": p.table},
+                    )
+                    continue
+                cutoff = now_epoch - p.days * 86400
+                where = f"{p.column} <= ?"
+                if p.predicate:
+                    where += f" AND ({p.predicate})"
+                cur = conn.execute(
+                    f"DELETE FROM {p.table} WHERE {where}",
+                    (cutoff,),
+                )
+                deleted[p.table] = deleted.get(p.table, 0) + (cur.rowcount or 0)
+    except sqlite3.Error as exc:
+        log.warning(
+            "retention_prune_failed",
+            extra={"code": "RET_PRUNE_FAILED", "error": str(exc)},
+        )
+        raise
+    return deleted

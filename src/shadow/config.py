@@ -1,8 +1,11 @@
+import logging
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+
+log = logging.getLogger(__name__)
 
 
 def load_config(path: str = "config.yaml") -> dict:
@@ -436,3 +439,30 @@ def region_capture_config(config: dict) -> dict:
     }
     user = (config.get("vision") or {}).get("region_capture") or {}
     return {**defaults, **user}
+
+
+def reconcile_retention_config(cfg: dict) -> dict:
+    """One-time fix for the audit's 90 vs 0 mismatch.
+
+    If `observation.retention_days` exists and `retention.observations_days` is
+    missing or 0, copy the legacy value over and log a deprecation notice.
+    Does NOT retroactively delete existing data; the new setting applies on the
+    next prune cycle.
+    """
+    legacy = (cfg.get("observation") or {}).get("retention_days")
+    retention = cfg.setdefault("retention", {})
+    current = retention.get("observations_days")
+
+    if legacy is not None and (current is None or int(current) == 0):
+        retention["observations_days"] = int(legacy)
+        log.warning(
+            "config_deprecated",
+            extra={
+                "code": "CFG_RETENTION_DEPRECATED",
+                "key": "observation.retention_days",
+                "value": legacy,
+                "action": "copied to retention.observations_days",
+            },
+        )
+
+    return cfg

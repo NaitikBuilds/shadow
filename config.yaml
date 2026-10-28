@@ -148,12 +148,22 @@ models:
   auto_download_optional: false
 
 retention:
-  observations_days: 0
-  low_value_days: 7
-  activity_days: 180
-  error_logs_days: 30
-  orphan_observation_hours: 24
-  prune_interval_hours: 24
+  # Canonical setting consumed by the prune loop.
+  observations_days: 90
+  digests_daily_days: 90
+  digests_weekly_days: 364
+  meeting_transcripts_days: 30
+  meeting_preps_days: 90
+  meeting_summaries_days: 90
+  notification_summaries_days: 7
+  weaver_stale_days: 90
+  # Non-numeric policies documented here; enforced in code:
+  ethical_values: until_user_deletes
+  clone_state: session_only
+
+# `observation.retention_days` is deprecated. If it is present, the config
+# loader copies it into `retention.observations_days` once when the latter is 0,
+# then logs a deprecation notice.
 
 capture:
   enabled: true
@@ -240,3 +250,4 @@ modes:
   active:
     observation_interval_sec: 10
     model_max_tokens: 512
+
