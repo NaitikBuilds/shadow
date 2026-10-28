@@ -73,6 +73,11 @@ markers = [
     "hardware(name): requires specific hardware, e.g. @pytest.mark.hardware('snapdragon')",
     "injection: prompt-injection security scenarios",
     "network: verifies network isolation",
+    "p4: Phase 4 feature tests",
+    "p4_privacy: Phase 4 privacy/security regression tests",
+    "slow: slow tests",
+    "hardware: requires target hardware (i5-12th Gen, 16 GB)",
+    "injection: prompt-injection suites",
 ]
 addopts = "-ra --strict-markers"
 
@@ -80,3 +85,12 @@ addopts = "-ra --strict-markers"
 docs = "docs/"
 architecture = "docs/ARCHITECTURE.md"
 decisions = "docs/DECISIONS.md"
+
+[pytest]
+markers = [
+    "p4: Phase 4 feature tests",
+    "p4_privacy: Phase 4 privacy/security regression tests",
+    "slow: slow tests",
+    "hardware: requires target hardware",
+    "injection: prompt-injection suites"
+]
