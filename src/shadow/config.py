@@ -466,3 +466,223 @@ def reconcile_retention_config(cfg: dict) -> dict:
         )
 
     return cfg
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 config (C04)
+# ---------------------------------------------------------------------------
+# Every key required by PRD §22.15. Defaults match the PRD; background /
+# audio / vision / notification / cloud features MUST default off
+# (FR-P4-SEC-13). Invalid values fall back to the default and log a
+# CFG_P4_INVALID notice naming the offending key.
+
+_PHASE4_DEFAULTS: dict = {
+    # Background vision (DR-P4-07/08)
+    "auto_summary_enabled": False,
+    "continuous_enabled": False,
+    "continuous_cadence_min": 5,
+    "continuous_max_inferences_per_hour": 30,
+    "continuous_idle_autodisable_hours": 8,
+    "bg_vision_model_preference": "auto",
+    # Ethical Mirror (DR-P4-03)
+    "ethical_mirror_opt_out": False,
+    # Shadow Cloning (DR-P4-10)
+    "clone_max_concurrent": 2,
+    "clone_idle_expiry_min": 240,
+    # Cross-Project Weaver
+    "weaver_enabled": False,
+    "weaver_included_projects": [],
+    "weaver_excluded_projects": [],
+    "weaver_min_confidence": 0.6,
+    "weaver_max_candidates_per_run": 20,
+    "weaver_state_days": 90,
+    # Silent Pair Partner
+    "silent_pair_enabled": False,
+    "silent_pair_min_confidence": 0.7,
+    "silent_pair_max_per_hour": 4,
+    "silent_pair_cooldown_min": 15,
+    # Meeting ASR (DR-P4-04)
+    "asr_model_id": "whisper-tiny.en",
+    "asr_max_file_mb": 500,
+    "asr_max_duration_min": 180,
+    # Meeting Prep
+    "meeting_prep_lookahead_hours": 24,
+    "meeting_prep_auto": False,
+    # Digest / Weekly (DR-P4-05/13)
+    "digest_schedule_enabled": False,
+    "digest_schedule_time": "18:00",
+    "digest_day_rollover": "00:00",
+    "weekly_start_day": "monday",
+    "weekly_schedule_enabled": False,
+    # Notification Summarization (DR-P4-09)
+    "notifications_enabled": False,
+    "notifications_allowed": [],
+    "notifications_denied": [],
+    "notifications_summary_max_per_hour": 4,
+    "notifications_retention_days": 7,
+    # Timeline / Entity Browser
+    "timeline_page_size": 100,
+    "entity_page_size": 100,
+    "entity_stale_days": 180,
+}
+
+_PHASE4_BOOL_KEYS = frozenset(
+    {
+        "auto_summary_enabled",
+        "continuous_enabled",
+        "ethical_mirror_opt_out",
+        "weaver_enabled",
+        "silent_pair_enabled",
+        "meeting_prep_auto",
+        "digest_schedule_enabled",
+        "weekly_schedule_enabled",
+        "notifications_enabled",
+    }
+)
+
+_PHASE4_INT_RANGES: dict = {
+    "continuous_cadence_min": (1, 5),
+    "continuous_max_inferences_per_hour": (1, 30),
+    "continuous_idle_autodisable_hours": (1, 8),
+    "clone_max_concurrent": (1, 5),
+    "clone_idle_expiry_min": (15, 1440),
+    "weaver_max_candidates_per_run": (5, 50),
+    "weaver_state_days": (30, 365),
+    "silent_pair_max_per_hour": (1, 12),
+    "silent_pair_cooldown_min": (5, 120),
+    "asr_max_file_mb": (10, 2000),
+    "asr_max_duration_min": (5, 600),
+    "meeting_prep_lookahead_hours": (1, 168),
+    "notifications_summary_max_per_hour": (1, 12),
+    "notifications_retention_days": (1, 90),
+    "timeline_page_size": (25, 500),
+    "entity_page_size": (25, 500),
+    "entity_stale_days": (30, 720),
+}
+
+_PHASE4_FLOAT_RANGES: dict = {
+    "weaver_min_confidence": (0.3, 0.95),
+    "silent_pair_min_confidence": (0.5, 0.95),
+}
+
+_PHASE4_ENUMS: dict = {
+    "bg_vision_model_preference": {"auto", "florence2", "moondream2"},
+    "weekly_start_day": {
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    },
+}
+
+_PHASE4_TIME_KEYS = frozenset({"digest_schedule_time", "digest_day_rollover"})
+
+_PHASE4_LIST_KEYS = frozenset(
+    {
+        "weaver_included_projects",
+        "weaver_excluded_projects",
+        "notifications_allowed",
+        "notifications_denied",
+    }
+)
+
+
+def _warn_p4_invalid(key: str, raw, reason: str) -> None:
+    log.warning(
+        "config_invalid",
+        extra={
+            "code": "CFG_P4_INVALID",
+            "key": key,
+            "raw": repr(raw),
+            "reason": reason,
+        },
+    )
+
+
+def _validate_phase4_value(key: str, raw, default):
+    """Coerce `raw` to the type of `default`. On any error, log
+    CFG_P4_INVALID and return the default."""
+    try:
+        if key in _PHASE4_BOOL_KEYS:
+            if isinstance(raw, bool):
+                return raw
+            if isinstance(raw, int) and raw in (0, 1):
+                return bool(raw)
+            if isinstance(raw, str):
+                v = raw.strip().lower()
+                if v in ("true", "1", "yes", "on"):
+                    return True
+                if v in ("false", "0", "no", "off"):
+                    return False
+            raise ValueError(f"not a boolean: {raw!r}")
+
+        if key in _PHASE4_INT_RANGES:
+            lo, hi = _PHASE4_INT_RANGES[key]
+            v = int(raw)
+            if key == "continuous_cadence_min" and v not in (1, 3, 5):
+                raise ValueError(f"cadence must be 1/3/5, got {v}")
+            if not (lo <= v <= hi):
+                raise ValueError(f"{v} outside [{lo}, {hi}]")
+            return v
+
+        if key in _PHASE4_FLOAT_RANGES:
+            lo, hi = _PHASE4_FLOAT_RANGES[key]
+            v = float(raw)
+            if not (lo <= v <= hi):
+                raise ValueError(f"{v} outside [{lo}, {hi}]")
+            return v
+
+        if key in _PHASE4_ENUMS:
+            v = str(raw).strip().lower()
+            if v not in _PHASE4_ENUMS[key]:
+                raise ValueError(f"{v!r} not in {_PHASE4_ENUMS[key]}")
+            return v
+
+        if key in _PHASE4_TIME_KEYS:
+            v = str(raw).strip()
+            parts = v.split(":")
+            if len(parts) != 2:
+                raise ValueError(f"expected HH:MM, got {v!r}")
+            h, m = int(parts[0]), int(parts[1])
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError(f"time out of range: {v!r}")
+            return f"{h:02d}:{m:02d}"
+
+        if key in _PHASE4_LIST_KEYS:
+            if not isinstance(raw, list):
+                raise ValueError(f"expected list, got {type(raw).__name__}")
+            return [str(x) for x in raw]
+
+        if isinstance(default, str):
+            return str(raw)
+        return raw
+    except (TypeError, ValueError) as exc:
+        _warn_p4_invalid(key, raw, str(exc))
+        return list(default) if isinstance(default, list) else default
+
+
+def phase4_config(config: dict) -> dict:
+    """Return the Phase 4 config section with defaults filled in and
+    invalid values replaced by safe defaults.
+
+    All booleans default to False for background / audio / vision /
+    notification / cloud features (FR-P4-SEC-13). Invalid values fall
+    back to the default and log a CFG_P4_INVALID notice with the key.
+    """
+    raw_section = config.get("phase4") or {}
+    if not isinstance(raw_section, dict):
+        _warn_p4_invalid(
+            "phase4", raw_section, "top-level phase4 section must be a dict"
+        )
+        raw_section = {}
+
+    out: dict = {}
+    for key, default in _PHASE4_DEFAULTS.items():
+        if key not in raw_section:
+            out[key] = list(default) if isinstance(default, list) else default
+            continue
+        out[key] = _validate_phase4_value(key, raw_section[key], default)
+    return out

@@ -251,3 +251,44 @@ modes:
     observation_interval_sec: 10
     model_max_tokens: 512
 
+phase4:
+  # All Phase 4 keys default safe (background/audio/vision/notification/
+  # cloud off per FR-P4-SEC-13). Full schema, defaults, ranges and
+  # validation: src/shadow/config.py::phase4_config.
+  auto_summary_enabled: false
+  continuous_enabled: false
+  continuous_cadence_min: 5
+  continuous_max_inferences_per_hour: 30
+  continuous_idle_autodisable_hours: 8
+  bg_vision_model_preference: auto
+  ethical_mirror_opt_out: false
+  clone_max_concurrent: 2
+  clone_idle_expiry_min: 240
+  weaver_enabled: false
+  weaver_included_projects: []
+  weaver_excluded_projects: []
+  weaver_min_confidence: 0.6
+  weaver_max_candidates_per_run: 20
+  weaver_state_days: 90
+  silent_pair_enabled: false
+  silent_pair_min_confidence: 0.7
+  silent_pair_max_per_hour: 4
+  silent_pair_cooldown_min: 15
+  asr_model_id: whisper-tiny.en
+  asr_max_file_mb: 500
+  asr_max_duration_min: 180
+  meeting_prep_lookahead_hours: 24
+  meeting_prep_auto: false
+  digest_schedule_enabled: false
+  digest_schedule_time: "18:00"
+  digest_day_rollover: "00:00"
+  weekly_start_day: monday
+  weekly_schedule_enabled: false
+  notifications_enabled: false
+  notifications_allowed: []
+  notifications_denied: []
+  notifications_summary_max_per_hour: 4
+  notifications_retention_days: 7
+  timeline_page_size: 100
+  entity_page_size: 100
+  entity_stale_days: 180
