@@ -19,6 +19,12 @@ from .focus_patterns import FocusPatternsEngine
 from .forecasting import ForecastingEngine
 from .insight import Insight
 from .intent_notes import IntentNotesEngine
+from .p4_tasks import (
+    P4_TASK_IDS,
+    phase4_task_specs,
+    register_p4_handler,
+    register_phase4_tasks,
+)
 from .prompt_builder import PromptBuilder
 from .recovery import RecoveryEngine
 from .recurring import RecurringPatternEngine
@@ -80,4 +86,8 @@ __all__ = [
     "ConsentDenied",
     "ConsentGate",
     "register_phase4_consent_channels",
+    "P4_TASK_IDS",
+    "phase4_task_specs",
+    "register_p4_handler",
+    "register_phase4_tasks",
 ]
