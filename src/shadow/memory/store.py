@@ -358,15 +358,19 @@ class MemoryStore:
     def ensure_consent(self, channel: str, granted: bool = False) -> bool:
         """Insert a consent channel with a default grant if it doesn't exist.
 
-        Does not overwrite an existing row (INSERT OR IGNORE).
+        Uses `set_consent` (the known-good write path) so the boolean column
+        name and any required columns (e.g. `scope`, `updated_at`) are handled
+        in exactly one place.
+
         Returns True if the channel was newly inserted.
         """
-        cur = self.conn.execute(
-            "INSERT OR IGNORE INTO consents(channel, granted) VALUES (?, ?)",
-            (channel, int(granted)),
-        )
-        self.conn.commit()
-        return cur.rowcount > 0
+        existing = self.conn.execute(
+            "SELECT 1 FROM consents WHERE channel = ?", (channel,)
+        ).fetchone()
+        if existing is not None:
+            return False
+        self.set_consent(channel, granted)
+        return True
 
     def get_consent(self, channel: str) -> bool:
         cur = self.conn.cursor()

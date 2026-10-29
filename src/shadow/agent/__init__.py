@@ -3,6 +3,14 @@
 from .ambient import AmbientTask, AmbientTaskList
 from .capture import QuickCapture
 from .clipboard_actions import ClipboardActionsEngine
+from .consent_gate import (
+    CHANNEL_NOTIFICATION_SUMMARIZATION,
+    CHANNEL_VISION_BACKGROUND,
+    DR_P4_09_APPROVED_KEY,
+    ConsentDenied,
+    ConsentGate,
+    register_phase4_consent_channels,
+)
 from .decay import KnowledgeDecayEngine
 from .dnd import DoNotDisturb
 from .feedback import FeedbackStats, FeedbackStore
@@ -66,4 +74,10 @@ __all__ = [
     "build_combined_context",
     "detect_intent",
     "wants_memory_context",
+    "CHANNEL_NOTIFICATION_SUMMARIZATION",
+    "CHANNEL_VISION_BACKGROUND",
+    "DR_P4_09_APPROVED_KEY",
+    "ConsentDenied",
+    "ConsentGate",
+    "register_phase4_consent_channels",
 ]
