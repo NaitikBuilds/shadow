@@ -13,6 +13,13 @@ from .consent_gate import (
 )
 from .decay import KnowledgeDecayEngine
 from .dnd import DoNotDisturb
+from .ethical_mirror import (
+    COMPLETE_PROFILE_MIN,
+    EthicalValueDuplicateError,
+    EthicalValueNotFoundError,
+    EthicalValuesStore,
+    EthicalValueValidationError,
+)
 from .feedback import FeedbackStats, FeedbackStore
 from .focus import FocusShield, FocusState
 from .focus_patterns import FocusPatternsEngine
@@ -98,4 +105,9 @@ __all__ = [
     "get_active_registry",
     "reset_active_registry",
     "set_active_registry",
+    "COMPLETE_PROFILE_MIN",
+    "EthicalValueDuplicateError",
+    "EthicalValueNotFoundError",
+    "EthicalValueValidationError",
+    "EthicalValuesStore",
 ]

@@ -24,6 +24,7 @@ import threading
 from collections.abc import Callable
 
 from shadow.config import phase4_config
+from shadow.memory.retention_registry import register_phase4_defaults
 
 from .consent_gate import register_phase4_consent_channels
 from .task_registry import BackgroundTaskRegistry, RetryPolicy, TaskSpec
@@ -266,6 +267,8 @@ def bootstrap_phase4(memory, config: dict) -> BackgroundTaskRegistry:
 
     p4_cfg = phase4_config(config)
     register_phase4_consent_channels(memory, config=config)
+
+    register_phase4_defaults()
 
     registry = BackgroundTaskRegistry(
         consent_manager=memory,
