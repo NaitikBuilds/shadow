@@ -56,6 +56,7 @@ from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.ui.diagnostics_panel import DiagnosticsPanel
 from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
+from shadow.ui.ethical_mirror_reflect_dialog import EthicalMirrorReflectDialog
 from shadow.ui.ethical_mirror_wizard import EthicalMirrorWizard
 from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.insight_panel import InsightPanel
@@ -739,6 +740,10 @@ class MainWindow(QMainWindow):
         ethical_action.triggered.connect(self.open_ethical_mirror_panel)
         settings_menu.addAction(ethical_action)
 
+        ethical_reflect_action = QAction("Check against my values…", self)
+        ethical_reflect_action.triggered.connect(self.open_ethical_reflection_dialog)
+        settings_menu.addAction(ethical_reflect_action)
+
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
 
@@ -879,6 +884,14 @@ class MainWindow(QMainWindow):
     def _open_ethical_mirror_wizard(self, parent=None):
         wizard = EthicalMirrorWizard(self.memory, parent=parent or self)
         wizard.exec()
+
+    def open_ethical_reflection_dialog(self):
+        dlg = EthicalMirrorReflectDialog(
+            self.memory,
+            self.backend,
+            parent=self,
+        )
+        dlg.exec()
 
     def _maybe_show_first_run_ethical_wizard(self):
         try:

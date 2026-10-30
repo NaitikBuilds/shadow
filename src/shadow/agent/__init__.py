@@ -20,6 +20,11 @@ from .ethical_mirror import (
     EthicalValuesStore,
     EthicalValueValidationError,
 )
+from .ethical_reflection import (
+    EthicalReflector,
+    Reflection,
+    ReflectionUnavailable,
+)
 from .feedback import FeedbackStats, FeedbackStore
 from .focus import FocusShield, FocusState
 from .focus_patterns import FocusPatternsEngine
@@ -110,4 +115,7 @@ __all__ = [
     "EthicalValueNotFoundError",
     "EthicalValueValidationError",
     "EthicalValuesStore",
+    "EthicalReflector",
+    "Reflection",
+    "ReflectionUnavailable",
 ]
