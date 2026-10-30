@@ -21,9 +21,13 @@ from .insight import Insight
 from .intent_notes import IntentNotesEngine
 from .p4_tasks import (
     P4_TASK_IDS,
+    bootstrap_phase4,
+    get_active_registry,
     phase4_task_specs,
     register_p4_handler,
     register_phase4_tasks,
+    reset_active_registry,
+    set_active_registry,
 )
 from .prompt_builder import PromptBuilder
 from .recovery import RecoveryEngine
@@ -90,4 +94,8 @@ __all__ = [
     "phase4_task_specs",
     "register_p4_handler",
     "register_phase4_tasks",
+    "bootstrap_phase4",
+    "get_active_registry",
+    "reset_active_registry",
+    "set_active_registry",
 ]

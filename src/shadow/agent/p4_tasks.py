@@ -20,8 +20,12 @@ No scheduler lives here. The registry's tick() is driven externally.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 
+from shadow.config import phase4_config
+
+from .consent_gate import register_phase4_consent_channels
 from .task_registry import BackgroundTaskRegistry, RetryPolicy, TaskSpec
 
 _p4_log = logging.getLogger(__name__)
@@ -212,3 +216,70 @@ def register_phase4_tasks(registry: BackgroundTaskRegistry) -> list[str]:
         extra={"count": len(added), "total": len(P4_TASK_IDS)},
     )
     return added
+
+
+# ---------------------------------------------------------------------------
+# Active-registry singleton + bootstrap (C05b)
+# ---------------------------------------------------------------------------
+_active_registry: BackgroundTaskRegistry | None = None
+_active_registry_lock = threading.Lock()
+
+
+def set_active_registry(registry: BackgroundTaskRegistry) -> None:
+    """Expose the process-wide registry that feature modules register against."""
+    global _active_registry
+    with _active_registry_lock:
+        _active_registry = registry
+
+
+def get_active_registry() -> BackgroundTaskRegistry | None:
+    """Return the process-wide registry, or None if bootstrap hasn't run."""
+    with _active_registry_lock:
+        return _active_registry
+
+
+def reset_active_registry() -> None:
+    """Test-only helper: clear the singleton."""
+    global _active_registry
+    with _active_registry_lock:
+        _active_registry = None
+
+
+def bootstrap_phase4(memory, config: dict) -> BackgroundTaskRegistry:
+    """One-shot startup wiring, called from main.py.
+
+    - Registers Phase 4 consent channels (vision_background, and
+      notification_summarization if DR-P4-09 is approved).
+    - Creates the BackgroundTaskRegistry bound to the flattened phase4
+      config (so TaskSpec.enabled_flag lookups work).
+    - Registers the 9 task specs from P4_TASK_IDS.
+    - Sets the active-registry singleton so feature modules can call
+      register_p4_handler() from their own commits.
+    - Does NOT start any timers. Each feature commit supplies its own
+      tick driver.
+
+    Idempotent: a second call returns the existing registry.
+    """
+    existing = get_active_registry()
+    if existing is not None:
+        return existing
+
+    p4_cfg = phase4_config(config)
+    register_phase4_consent_channels(memory, config=config)
+
+    registry = BackgroundTaskRegistry(
+        consent_manager=memory,
+        config=p4_cfg,
+        logger=_p4_log,
+    )
+    register_phase4_tasks(registry)
+    set_active_registry(registry)
+    _p4_log.info(
+        "p4_bootstrapped",
+        extra={
+            "tasks": len(P4_TASK_IDS),
+            "auto_summary_enabled": p4_cfg["auto_summary_enabled"],
+            "continuous_enabled": p4_cfg["continuous_enabled"],
+        },
+    )
+    return registry

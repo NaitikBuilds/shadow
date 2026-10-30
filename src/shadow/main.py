@@ -126,10 +126,14 @@ def main() -> int:
 
             # Never assume a text-only model supports image input.
             if candidate.supports_vision():
-                print(f"[Main] Provider {provider_name} supports vision. Adding to pool.")
+                print(
+                    f"[Main] Provider {provider_name} supports vision. Adding to pool."
+                )
                 vision_providers.append((priority, candidate))
             else:
-                print(f"[Main] Provider {provider_name} (model: {candidate.provider.model}) does NOT support vision.")
+                print(
+                    f"[Main] Provider {provider_name} (model: {candidate.provider.model}) does NOT support vision."
+                )
                 candidate.close()
 
         if vision_providers:
@@ -166,8 +170,27 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         reporter.silent("retention", f"pruning failed: {exc}", exc=exc)
 
+    # --- Phase 4 bootstrap (C05b) -----------------------------------------
+    # Register Phase 4 consent channels, wire the shared BackgroundTaskRegistry
+    # with the 9 task specs from PRD §22.11, and expose it via the active-
+    # registry singleton. No timers start here — each feature commit supplies
+    # the tick driver for its task.
+    try:
+        from shadow.agent.p4_tasks import bootstrap_phase4
+
+        task_registry = bootstrap_phase4(memory, config)
+    except Exception as exc:  # noqa: BLE001
+        task_registry = None
+        reporter.silent("phase4", f"Phase 4 bootstrap failed: {exc}", exc=exc)
+    # ----------------------------------------------------------------------
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # --- Phase 4 shutdown hook (C05b) -------------------------------------
+    if task_registry is not None:
+        app.aboutToQuit.connect(lambda: task_registry.shutdown(timeout_sec=5.0))
+    # ----------------------------------------------------------------------
 
     # --- Ctrl+C handling --------------------------------------------------
     # Qt's exec() loop blocks Python signal handling. A 200 ms timer whose
