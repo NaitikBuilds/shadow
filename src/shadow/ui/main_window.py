@@ -2,8 +2,8 @@ import io
 import sys
 
 from PIL import Image
-from PySide6.QtCore import QRect, Qt, QThread, Signal
-from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtCore import QRect, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,  # NEW in Commit 3
@@ -55,6 +55,8 @@ from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
 from shadow.ui.diagnostics_panel import DiagnosticsPanel
+from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
+from shadow.ui.ethical_mirror_wizard import EthicalMirrorWizard
 from shadow.ui.indicator import ObservationIndicator
 from shadow.ui.insight_panel import InsightPanel
 from shadow.ui.notifications import TrayNotifier
@@ -235,6 +237,11 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
         self._setup_tray()
+
+        # Offer Ethical Mirror onboarding on first launch (2s delay so the
+        # main window is fully shown first). The check is a no-op once the
+        # user has onboarded, opted out, or dismissed 3 times.
+        QTimer.singleShot(2000, self._maybe_show_first_run_ethical_wizard)
 
         self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         self.search_shortcut.setContext(Qt.ApplicationShortcut)
@@ -728,6 +735,10 @@ class MainWindow(QMainWindow):
         cloud_action = settings_menu.addAction("Cloud LLM…")
         cloud_action.triggered.connect(self.open_cloud_panel)
 
+        ethical_action = QAction("Ethical Mirror...", self)
+        ethical_action.triggered.connect(self.open_ethical_mirror_panel)
+        settings_menu.addAction(ethical_action)
+
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
 
@@ -852,6 +863,39 @@ class MainWindow(QMainWindow):
         close_btn.clicked.connect(dlg.accept)
         layout.addWidget(close_btn)
         dlg.exec()
+
+    def open_ethical_mirror_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Ethical Mirror")
+        dlg.resize(720, 620)
+        layout = QVBoxLayout(dlg)
+        panel = EthicalMirrorPanel(self.memory, self.config, parent=dlg)
+        panel.wizard_requested.connect(
+            lambda: self._open_ethical_mirror_wizard(parent=dlg)
+        )
+        layout.addWidget(panel)
+        dlg.exec()
+
+    def _open_ethical_mirror_wizard(self, parent=None):
+        wizard = EthicalMirrorWizard(self.memory, parent=parent or self)
+        wizard.exec()
+
+    def _maybe_show_first_run_ethical_wizard(self):
+        try:
+            from shadow.agent.ethical_mirror import EthicalValuesStore
+
+            store = EthicalValuesStore(self.memory)
+            if not store.should_offer_onboarding():
+                return
+            self._open_ethical_mirror_wizard(parent=self)
+        except Exception as exc:  # noqa: BLE001
+            # Never block startup on the wizard.
+            try:
+                self.reporter.silent(
+                    "ethical_mirror", f"first-run wizard failed: {exc}", exc=exc
+                )
+            except Exception:
+                pass
 
     def open_vision_exclusions(self):
         from shadow.ui.vision_exclusions_panel import VisionExclusionsPanel

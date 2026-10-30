@@ -276,6 +276,43 @@ class EthicalValuesStore:
             cur = self._conn.execute("DELETE FROM ethical_values")
         return cur.rowcount or 0
 
+    # ---- onboarding state ------------------------------------------------
+    def is_opted_out(self) -> bool:
+        return self._memory.get_meta(_OPT_OUT_META_KEY) == "1"
+
+    def set_opt_out(self, opted_out: bool) -> None:
+        self._memory.set_meta(_OPT_OUT_META_KEY, "1" if opted_out else "0")
+
+    def is_onboarded(self) -> bool:
+        return bool(self._memory.get_meta(_ONBOARDED_META_KEY))
+
+    def mark_onboarded(self) -> None:
+        self._memory.set_meta(_ONBOARDED_META_KEY, str(_now_ms()))
+
+    def reset_onboarding(self) -> None:
+        self._memory.set_meta(_ONBOARDED_META_KEY, "")
+        self._memory.set_meta(_DISMISSED_META_KEY, "0")
+
+    def dismissed_count(self) -> int:
+        raw = self._memory.get_meta(_DISMISSED_META_KEY) or "0"
+        try:
+            return int(raw)
+        except ValueError:
+            return 0
+
+    def increment_dismissed(self) -> int:
+        n = self.dismissed_count() + 1
+        self._memory.set_meta(_DISMISSED_META_KEY, str(n))
+        return n
+
+    def should_offer_onboarding(self) -> bool:
+        """Whether to show the first-run wizard at app launch."""
+        if self.is_opted_out():
+            return False
+        if self.is_onboarded():
+            return False
+        return self.dismissed_count() < DISMISS_OFFER_LIMIT
+
 
 def _row_to_dict(row) -> dict:
     return {
@@ -290,3 +327,54 @@ def _row_to_dict(row) -> dict:
         "created_at": row[8],
         "updated_at": row[9],
     }
+
+
+# ---------------------------------------------------------------------------
+# Onboarding prompts + first-run helpers (C08)
+# ---------------------------------------------------------------------------
+# Ten non-diagnostic prompts (per FR-P4-ETH-06: no health / politics / religion).
+# Order matters: it is the display order and the onboarding_prompt_id value.
+ONBOARDING_PROMPTS: tuple[str, ...] = (
+    "What do you value most in how you treat other people?",
+    "What is a principle you would never compromise, even under pressure?",
+    "When you must choose between speed and thoroughness, what guides you?",
+    "What does 'integrity' mean in your work?",
+    "What kind of impact do you want your work to have?",
+    "How do you weigh short-term wins against long-term consequences?",
+    "What would make you say no to an opportunity, even if it paid well?",
+    "When you disagree with someone, what matters more — being heard, "
+    "or understanding them?",
+    "What mistake have you made that taught you something you still live by?",
+    "If someone described your values in one sentence, what would you hope "
+    "they would say?",
+)
+
+_OPT_OUT_META_KEY = "ethical_mirror_opt_out"
+_ONBOARDED_META_KEY = "ethical_mirror_onboarded_at"
+_DISMISSED_META_KEY = "ethical_mirror_dismissed_count"
+
+DISMISS_OFFER_LIMIT = 3
+
+
+def next_unanswered_prompt_index(store: EthicalValuesStore) -> int | None:
+    """Return the index (0..N-1) of the first ONBOARDING_PROMPTS not yet
+    answered by an active value, or None if all are answered."""
+    answered = {
+        v["onboarding_prompt_id"]
+        for v in store.list_active()
+        if v["onboarding_prompt_id"] is not None
+    }
+    for i in range(len(ONBOARDING_PROMPTS)):
+        if i not in answered:
+            return i
+    return None
+
+
+def answered_prompt_count(store: EthicalValuesStore) -> int:
+    """Number of ONBOARDING_PROMPTS covered by an active value."""
+    answered = {
+        v["onboarding_prompt_id"]
+        for v in store.list_active()
+        if v["onboarding_prompt_id"] is not None
+    }
+    return sum(1 for i in range(len(ONBOARDING_PROMPTS)) if i in answered)
