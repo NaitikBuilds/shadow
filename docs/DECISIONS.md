@@ -203,6 +203,68 @@ Revisit: If we add a Linux port.
 
 ## Documentation
 
+**DR-P4-14b — Ethical Mirror cloud opt-in exception**
+**Status:** APPROVED (amends DR-P4-14 for Ethical Mirror only)
+**Date:** 2026-10-31 (amended 2026-11-01: two-layer consent)
+**Approver:** Product owner
+**Amends:** DR-P4-14 (which remains in force for digests, summaries,
+Weaver, meeting transcripts, notification summaries, background vision)
+**Supersedes:** §22.10.1 row for Ethical Mirror ("Cloud: No")
+### Question
+Should Ethical Mirror reflections be allowed to use the cloud LLM when
+the user explicitly opts in per-reflection?
+### Decision
+**Yes — two-layer opt-in.**
+1. **Config toggle** (`phase4.ethical_mirror_cloud_enabled`, default
+   False). Surfaced as a checkbox in Settings → Ethical Mirror.
+2. **Per-reflection checkbox + preview dialog** (default unchecked).
+   Clicking "Reflect" with the box checked shows a one-time-per-window
+   preview: exact values, decision context, provider, local-fallback
+   note, optional "Don't ask again". No cloud call happens without both
+   layers being active for that specific reflection.
+### What was removed from the original three-layer design
+A third consent channel (`ethical_reflection_cloud`) was considered and
+rejected. The per-reflection preview dialog is the actual consent
+surface; adding a separate consent channel duplicated the same user
+decision without strengthening the privacy story. The audit trail
+remains via the config file's on-disk state and the activity log;
+revocation is achieved by unchecking the config toggle.
+### Rules (all must hold)
+1. **Default off** — `phase4.ethical_mirror_cloud_enabled: false`;
+   per-reflection checkbox unchecked every time by default.
+2. **First-use preview** — first time cloud is used (per window/session
+   until "Don't ask again"), a dialog shows the exact values that will
+   be sent, the decision context, destination provider, and "Local
+   fallback available if cloud is unreachable."
+3. **Automatic local fallback** — cloud failure (network error, empty
+   output, prohibited content) → local reflection runs; result shows
+   `route="local_fallback"`.
+4. **Route visibility** — every reflection shows its route: "Local",
+   "Cloud (Gemini)", "Cloud (Groq)", or "Local (cloud fallback)".
+5. **Never automatic** — no scheduled, background, or implicit cloud
+   reflection. User must click "Reflect" for cloud to be considered.
+6. **Same validation** — cloud responses pass through `_find_prohibited`
+   and citation validation identically to local responses.
+7. **Same injection defense** — cloud prompts use PromptBuilder
+   `<untrusted_observation>` wrapping.
+8. **Values never sent outside a reflection** — onboarding wizard,
+   panel CRUD, edits, and internal state never call cloud. Only the
+   explicit reflect action.
+9. **Instant disable** — unchecking the toggle takes effect immediately;
+   no restart required.
+### What does NOT change
+- Ethical values remain locally stored only
+- Digests, summaries, Weaver, meeting transcripts, notification
+  summaries, and background vision remain local-only (DR-P4-14)
+- No new external recipients beyond the cloud providers the user has
+  already configured for chat
+### Privacy note
+Real privacy tradeoff acknowledged: with cloud enabled, user-stated
+values and the current decision context are sent to a third party. The
+two-layer opt-in (config toggle + per-reflection preview) makes this a
+conscious choice every time. Users who prefer local-only retain a
+working feature at lower quality.
+
 **2026-10 — Privacy-aware region capture with text-only persistence.**
 Reason: Users need to ask questions about specific screen regions without exposing unrelated screen content. SHADOW uses an explicit region-selection overlay and applies privacy checks before analysis. Only the selected region is sent for visual analysis, subject to consent and configured privacy restrictions. The resulting question and answer may be stored as a text-only observation; the captured image itself is not persisted.
 Revisit: When region-capture privacy controls or storage requirements change.

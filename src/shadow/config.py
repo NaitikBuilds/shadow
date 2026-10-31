@@ -486,6 +486,7 @@ _PHASE4_DEFAULTS: dict = {
     "bg_vision_model_preference": "auto",
     # Ethical Mirror (DR-P4-03)
     "ethical_mirror_opt_out": False,
+    "ethical_mirror_cloud_enabled": False,
     # Shadow Cloning (DR-P4-10)
     "clone_max_concurrent": 2,
     "clone_idle_expiry_min": 240,
@@ -531,6 +532,7 @@ _PHASE4_BOOL_KEYS = frozenset(
         "auto_summary_enabled",
         "continuous_enabled",
         "ethical_mirror_opt_out",
+        "ethical_mirror_cloud_enabled",
         "weaver_enabled",
         "silent_pair_enabled",
         "meeting_prep_auto",
@@ -686,3 +688,85 @@ def phase4_config(config: dict) -> dict:
             continue
         out[key] = _validate_phase4_value(key, raw_section[key], default)
     return out
+
+
+def save_phase4_setting(key: str, value, path: str = "config.yaml") -> None:
+    """Update one phase4 key in config.yaml. Line-level patch preserves
+    comments, ordering, and other sections.
+
+    If the phase4: section or the key doesn't exist, they are added.
+    """
+    import re
+    from pathlib import Path
+
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+
+    if isinstance(value, bool):
+        v_str = "true" if value else "false"
+    elif value is None:
+        v_str = "null"
+    elif isinstance(value, str):
+        if any(c in value for c in ":[]{},#&*!|>'\"%@`") or value.strip() != value:
+            import json
+
+            v_str = json.dumps(value)
+        else:
+            v_str = value
+    else:
+        v_str = str(value)
+
+    lines = text.splitlines(keepends=True)
+
+    # Locate the phase4: section
+    phase4_start = None
+    phase4_indent = 0
+    for i, line in enumerate(lines):
+        stripped = line.rstrip("\r\n")
+        m = re.match(r"^(\s*)phase4\s*:\s*$", stripped)
+        if m:
+            phase4_start = i
+            phase4_indent = len(m.group(1))
+            break
+
+    if phase4_start is None:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += f"\nphase4:\n  {key}: {v_str}\n"
+        p.write_text(text, encoding="utf-8")
+        return
+
+    # Determine child indent from first non-empty child line
+    child_indent = phase4_indent + 2
+    for i in range(phase4_start + 1, len(lines)):
+        stripped = lines[i].rstrip("\r\n")
+        if not stripped.strip():
+            continue
+        m = re.match(r"^(\s+)", stripped)
+        if m:
+            child_indent = len(m.group(1))
+        break
+
+    indent_str = " " * child_indent
+    key_re = re.compile(rf"^(\s+){re.escape(key)}\s*:\s*(.*)$")
+
+    # Find the key inside the phase4 block
+    key_found_at = None
+    insert_at = phase4_start + 1
+    for i in range(phase4_start + 1, len(lines)):
+        stripped = lines[i].rstrip("\r\n")
+        if stripped.strip() and not stripped.startswith(" " * (phase4_indent + 1)):
+            break  # section ended
+        insert_at = i + 1
+        m = key_re.match(stripped)
+        if m:
+            key_found_at = i
+            break
+
+    new_line = f"{indent_str}{key}: {v_str}\n"
+    if key_found_at is not None:
+        lines[key_found_at] = new_line
+    else:
+        lines.insert(insert_at, new_line)
+
+    p.write_text("".join(lines), encoding="utf-8")

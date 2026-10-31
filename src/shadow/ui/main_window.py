@@ -870,11 +870,17 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def open_ethical_mirror_panel(self):
+        cloud_available = getattr(self.backend, "cloud", None) is not None
         dlg = QDialog(self)
         dlg.setWindowTitle("SHADOW — Ethical Mirror")
-        dlg.resize(720, 620)
+        dlg.resize(720, 660)
         layout = QVBoxLayout(dlg)
-        panel = EthicalMirrorPanel(self.memory, self.config, parent=dlg)
+        panel = EthicalMirrorPanel(
+            self.memory,
+            self.config,
+            cloud_available=cloud_available,
+            parent=dlg,
+        )
         panel.wizard_requested.connect(
             lambda: self._open_ethical_mirror_wizard(parent=dlg)
         )
@@ -886,9 +892,14 @@ class MainWindow(QMainWindow):
         wizard.exec()
 
     def open_ethical_reflection_dialog(self):
+        cloud_backend = None
+        if hasattr(self.backend, "cloud"):
+            cloud_backend = self.backend.cloud
         dlg = EthicalMirrorReflectDialog(
             self.memory,
             self.backend,
+            cloud_backend=cloud_backend,
+            config=self.config,
             parent=self,
         )
         dlg.exec()

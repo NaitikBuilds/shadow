@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QInputDialog,
@@ -44,10 +45,11 @@ class EthicalMirrorPanel(QWidget):
     wizard_requested = Signal()
     values_changed = Signal()
 
-    def __init__(self, memory, config=None, parent=None) -> None:
+    def __init__(self, memory, config=None, cloud_available=False, parent=None):
         super().__init__(parent)
         self._memory = memory
         self._config = config
+        self._cloud_available = cloud_available
         self._store = EthicalValuesStore(memory)
         self._build_ui()
         self._refresh()
@@ -105,6 +107,24 @@ class EthicalMirrorPanel(QWidget):
 
         self._tabs.addTab(archived_wrap, "Archived")
 
+        # --- cloud opt-in ---
+        cloud_row = QHBoxLayout()
+        self._cloud_toggle = QCheckBox("Use cloud for reflections", self)
+        self._cloud_toggle.setToolTip(
+            "Sends your values + the decision context to the configured "
+            "cloud provider. Local fallback is available. You'll still see "
+            "a preview dialog before the first cloud reflection."
+        )
+        self._cloud_toggle.stateChanged.connect(self._on_cloud_toggle_changed)
+        cloud_row.addWidget(self._cloud_toggle)
+
+        if not self._cloud_available:
+            hint = QLabel("(cloud not configured)", self)
+            hint.setStyleSheet("color: #888; font-size: 11px;")
+            cloud_row.addWidget(hint)
+        cloud_row.addStretch(1)
+        root.addLayout(cloud_row)
+
         # --- footer actions ---
         footer = QHBoxLayout()
         self._replay_btn = QPushButton("Replay onboarding", self)
@@ -130,6 +150,16 @@ class EthicalMirrorPanel(QWidget):
         self._refresh_active()
         self._refresh_archived()
         self._refresh_footer_labels()
+        try:
+            from shadow.config import phase4_config
+
+            p4 = phase4_config(self._config or {})
+            enabled = bool(p4.get("ethical_mirror_cloud_enabled", False))
+            self._cloud_toggle.setChecked(enabled)
+            self._cloud_toggle.setEnabled(self._cloud_available)
+        except Exception:
+            self._cloud_toggle.setChecked(False)
+            self._cloud_toggle.setEnabled(False)
 
     def _refresh_banner(self) -> None:
         if self._store.is_opted_out():
@@ -375,3 +405,27 @@ class EthicalMirrorPanel(QWidget):
         self._store.clear_all()
         self._refresh()
         self.values_changed.emit()
+
+    def _on_cloud_toggle_changed(self, _state: int) -> None:
+        new_val = self._cloud_toggle.isChecked()
+        try:
+            from shadow.config import save_phase4_setting
+
+            save_phase4_setting("ethical_mirror_cloud_enabled", new_val)
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Config write failed",
+                f"Could not save the setting to config.yaml:\n{exc}",
+            )
+            # Revert the checkbox
+            self._cloud_toggle.blockSignals(True)
+            self._cloud_toggle.setChecked(not new_val)
+            self._cloud_toggle.blockSignals(False)
+            return
+        # Mirror the change in the in-memory config so the current session
+        # sees it without a restart.
+        if self._config is not None:
+            p4 = self._config.setdefault("phase4", {})
+            if isinstance(p4, dict):
+                p4["ethical_mirror_cloud_enabled"] = new_val

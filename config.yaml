@@ -6,13 +6,11 @@ consent:
   typing_dynamics: false
   webcam_posture: false
   clipboard: false
-
 observation:
   indicator_enabled: true
   indicator_position: topbar
   default_mode: balanced
   retention_days: 90
-
 perception:
   enabled: true
   tick_interval_sec: 30
@@ -34,32 +32,28 @@ perception:
   identifiers:
     extract_urls: true
     extract_paths: true
-
   image_files:
     watch_folders:
-      - "~/Pictures"
-      - "~/Documents"
-      - "~/Downloads"
+    - ~/Pictures
+    - ~/Documents
+    - ~/Downloads
     extensions:
-      - ".png"
-      - ".jpg"
-      - ".jpeg"
-      - ".webp"
+    - .png
+    - .jpg
+    - .jpeg
+    - .webp
     max_file_size_mb: 15
-    image_max_side: 1024  
-
+    image_max_side: 1024
   tabs:
     enabled: true
     stale_hours: 6
     retention_days: 7
     related_min_overlap: 2
-
   change_detection:
     enabled: true
     threshold: 5
     hash_size: 8
     min_interval_ms: 500
-
   cadence:
     enabled: true
     min_interval_sec: 5
@@ -67,18 +61,14 @@ perception:
     idle_interval_sec: 30
     accelerate_multiplier: 0.5
     backoff_multiplier: 1.5
-
   reading_position:
     enabled: true
     min_change_pct: 5
     retention_days: 30
-
   window_classifier:
     custom_map: {}
-
   interactive:
     max_elements: 100
-
   sources:
     active_window: true
     screen_ocr: true
@@ -88,7 +78,6 @@ perception:
     clipboard: true
     screen_uia: true
     image_files: true
-
   budget:
     enabled: true
     active_multiplier: 0.7
@@ -98,14 +87,11 @@ perception:
     low_battery_multiplier: 2.0
     min_interval_sec: 5
     max_interval_sec: 180
-
   max_title_length: 200
   min_title_length: 3
-
   typing:
     pause_threshold_sec: 2.0
     min_keystrokes: 10
-
   documents:
     watch_folders:
     - ~/Documents
@@ -118,7 +104,6 @@ perception:
     - .docx
     max_file_size_mb: 5
     max_chars: 4000
-
   calendar:
     watch_folders:
     - ~/Documents
@@ -126,7 +111,6 @@ perception:
     - ~/OneDrive/Documents
     lookback_days: 1
     lookahead_days: 14
-
 model:
   path: models/Llama-3.2-1B-Instruct-Q4_K_M.gguf
   n_ctx: 2048
@@ -137,18 +121,14 @@ model:
   max_tokens: 512
   embedder_model: models/minilm/model.onnx
   embedder_tokenizer: models/minilm/tokenizer.json
-
 memory:
   db_path: data/shadow.db
   vector_dim: 384
-
 models:
   cache_dir: models
   verify_on_load: true
   auto_download_optional: false
-
 retention:
-  # Canonical setting consumed by the prune loop.
   observations_days: 90
   digests_daily_days: 90
   digests_weekly_days: 364
@@ -157,19 +137,12 @@ retention:
   meeting_summaries_days: 90
   notification_summaries_days: 7
   weaver_stale_days: 90
-  # Non-numeric policies documented here; enforced in code:
   ethical_values: until_user_deletes
   clone_state: session_only
-
-# `observation.retention_days` is deprecated. If it is present, the config
-# loader copies it into `retention.observations_days` once when the latter is 0,
-# then logs a deprecation notice.
-
 capture:
   enabled: true
   hotkey: <ctrl>+<shift>+s
   output_dir: ~/SHADOW_workspace/captures
-
 agent:
   stuck:
     enabled: true
@@ -177,12 +150,10 @@ agent:
     alternation_minutes: 15
     alternation_count: 8
     error_lookback_minutes: 5
-
 redaction:
   enabled: true
   redact_emails: false
   placeholder: '[REDACTED]'
-
 cloud:
   enabled: true
   fallback_to_local: true
@@ -208,37 +179,29 @@ cloud:
     env_key: SHADOW_CEREBRAS_KEY
     base_url: https://api.cerebras.ai/v1
     priority: 3
-
 vision:
   enabled: true
-
   text_model_path: models/moondream2/moondream2-text-model-f16.gguf
   mmproj_path: models/moondream2/moondream2-mmproj-f16.gguf
-
   n_threads: 4
   n_ctx: 2048
   unload_after_sec: 300
   prompt_cooldown_min: 15
   require_thin_text: true
-
   image_max_side: 1024
   image_max_bytes: 10485760
-
   local_fallback: true
-
   region_capture:
     enabled: false
-    hotkey: "<ctrl>+<shift>+q"
-    default_prompt: "What is this?"
+    hotkey: <ctrl>+<shift>+q
+    default_prompt: What is this?
     max_region_mb: 10
-
   cloud:
     enabled: true
     providers:
-      - gemini
+    - gemini
     require_preview: true
     fallback_to_local: true
-
 modes:
   default: balanced
   lite:
@@ -250,11 +213,7 @@ modes:
   active:
     observation_interval_sec: 10
     model_max_tokens: 512
-
 phase4:
-  # All Phase 4 keys default safe (background/audio/vision/notification/
-  # cloud off per FR-P4-SEC-13). Full schema, defaults, ranges and
-  # validation: src/shadow/config.py::phase4_config.
   auto_summary_enabled: false
   continuous_enabled: false
   continuous_cadence_min: 5
@@ -262,6 +221,7 @@ phase4:
   continuous_idle_autodisable_hours: 8
   bg_vision_model_preference: auto
   ethical_mirror_opt_out: false
+  ethical_mirror_cloud_enabled: true
   clone_max_concurrent: 2
   clone_idle_expiry_min: 240
   weaver_enabled: false
@@ -280,8 +240,8 @@ phase4:
   meeting_prep_lookahead_hours: 24
   meeting_prep_auto: false
   digest_schedule_enabled: false
-  digest_schedule_time: "18:00"
-  digest_day_rollover: "00:00"
+  digest_schedule_time: '18:00'
+  digest_day_rollover: 00:00
   weekly_start_day: monday
   weekly_schedule_enabled: false
   notifications_enabled: false

@@ -16,6 +16,7 @@ from shadow.agent.ethical_mirror import (
     next_unanswered_prompt_index,
 )
 from shadow.memory import MemoryStore
+from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
 
 pytestmark = pytest.mark.p4
 
@@ -177,3 +178,65 @@ def test_panel_renders_values(memory, qtbot):
     qtbot.addWidget(panel)
     # Two value rows in the active layout.
     assert panel._active_rows.count() == 2
+
+
+def test_panel_cloud_toggle_default_off(memory, qtbot):
+    from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
+
+    panel = EthicalMirrorPanel(memory, config={"phase4": {}}, cloud_available=True)
+    qtbot.addWidget(panel)
+    assert panel._cloud_toggle.isChecked() is False
+    assert panel._cloud_toggle.isEnabled() is True
+
+
+def test_panel_cloud_toggle_reflects_config(memory, qtbot):
+    from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
+
+    cfg = {"phase4": {"ethical_mirror_cloud_enabled": True}}
+    panel = EthicalMirrorPanel(memory, config=cfg, cloud_available=True)
+    qtbot.addWidget(panel)
+    assert panel._cloud_toggle.isChecked() is True
+
+
+def test_panel_cloud_toggle_disabled_without_backend(memory, qtbot):
+    from shadow.ui.ethical_mirror_panel import EthicalMirrorPanel
+
+    panel = EthicalMirrorPanel(
+        memory,
+        config={"phase4": {}},
+        cloud_available=False,
+    )
+    qtbot.addWidget(panel)
+    assert panel._cloud_toggle.isEnabled() is False
+
+
+def test_panel_cloud_toggle_writes_config(memory, qtbot, tmp_path, monkeypatch):
+    """Toggling writes to config.yaml and mutates in-memory config."""
+    import shadow.ui.ethical_mirror_panel
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        "phase4:\n  ethical_mirror_cloud_enabled: false\n",
+        encoding="utf-8",
+    )
+
+    # Route save_phase4_setting through our temp file
+    orig = shadow.config.save_phase4_setting
+
+    def patched(key, value, path="config.yaml"):
+        return orig(key, value, path=str(cfg_path))
+
+    monkeypatch.setattr(
+        shadow.config,
+        "save_phase4_setting",
+        patched,
+        raising=True,
+    )
+
+    cfg = {"phase4": {"ethical_mirror_cloud_enabled": False}}
+    panel = EthicalMirrorPanel(memory, config=cfg, cloud_available=True)
+    qtbot.addWidget(panel)
+    panel._cloud_toggle.setChecked(True)
+    assert cfg["phase4"]["ethical_mirror_cloud_enabled"] is True
+    text = cfg_path.read_text(encoding="utf-8")
+    assert "ethical_mirror_cloud_enabled: true" in text

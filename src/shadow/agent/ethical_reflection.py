@@ -43,6 +43,7 @@ class Reflection:
     uncertainty: str = ""
     fallback_reason: str | None = None
     raw_text: str = ""  # kept for tests; never persisted
+    route: str = "local"  # "local" | "cloud" | "local_fallback"
 
 
 class ReflectionUnavailable(Exception):
@@ -65,6 +66,50 @@ def _assert_local(backend):
         f"Ethical reflections require a local model (DR-P4-14). "
         f"Got {type(backend).__name__}. Pass the local backend explicitly."
     )
+
+
+def _assert_cloud(backend, local_backend=None):
+    """Validate a cloud backend or return None.
+
+    Accepts CloudBackend, ProviderPool, HybridBackend (unwraps .cloud),
+    or any duck-typed object with a .generate method. Rejects the local
+    backend being passed as cloud.
+    """
+    if backend is None:
+        return None
+    if hasattr(backend, "cloud"):
+        backend = backend.cloud
+    if not hasattr(backend, "generate"):
+        raise ReflectionUnavailable(
+            f"cloud_backend must have generate(): got {type(backend).__name__}"
+        )
+    if local_backend is not None and backend is local_backend:
+        raise ReflectionUnavailable(
+            "cloud_backend must be distinct from the local backend"
+        )
+    return backend
+
+
+def _cloud_provider_name(backend) -> str:
+    """Best-effort human-readable provider name for UI display."""
+    if backend is None:
+        return "cloud"
+    prov = getattr(backend, "provider", None)
+    if prov is not None:
+        name = getattr(prov, "name", None)
+        if name:
+            return str(name)
+    provs = getattr(backend, "providers", None)
+    if provs:
+        try:
+            first = provs[0]
+            b = first[1] if isinstance(first, tuple) else first
+            name = getattr(getattr(b, "provider", None), "name", None)
+            if name:
+                return str(name)
+        except Exception:
+            pass
+    return "cloud"
 
 
 # ---------------------------------------------------------------------------
@@ -417,11 +462,21 @@ MAX_VALUES = 20  # bounds prompt tokens; PRD §22.4.2 §C
 
 
 class EthicalReflector:
-    def __init__(self, store, backend) -> None:
+    def __init__(self, store, backend, cloud_backend=None) -> None:
         self._store = store
-        self._backend = _assert_local(backend)
+        self._local_backend = _assert_local(backend)
+        self._cloud_backend = _assert_cloud(
+            cloud_backend,
+            local_backend=self._local_backend,
+        )
 
-    def reflect(self, decision_context: str) -> Reflection:
+    def cloud_available(self) -> bool:
+        return self._cloud_backend is not None
+
+    def cloud_provider_name(self) -> str:
+        return _cloud_provider_name(self._cloud_backend)
+
+    def reflect(self, decision_context: str, use_cloud: bool = False) -> Reflection:
         ctx = (decision_context or "").strip()
         if not ctx:
             return Reflection(mode="unavailable", fallback_reason="no_context")
@@ -432,9 +487,22 @@ class EthicalReflector:
 
         limited = self._store.is_limited_mode()
 
+        if use_cloud and self._cloud_backend is not None:
+            cloud_result = self._reflect_cloud(ctx, values, limited)
+            if cloud_result is not None:
+                return cloud_result
+            # Cloud failed (exception / empty / prohibited) — fall back to local
+            local_result = self._reflect_local(ctx, values, limited)
+            local_result.route = "local_fallback"
+            return local_result
+
+        return self._reflect_local(ctx, values, limited)
+
+    # ---- local path (Level 1 two-step) -----------------------------------
+    def _reflect_local(self, ctx, values, limited) -> Reflection:
         try:
             citations, raw_analysis = _reflect_two_step(
-                self._backend,
+                self._local_backend,
                 ctx,
                 values,
             )
@@ -442,6 +510,7 @@ class EthicalReflector:
             return Reflection(
                 mode="unavailable",
                 fallback_reason=f"model_error:{type(exc).__name__}",
+                route="local",
             )
 
         if not citations:
@@ -449,6 +518,7 @@ class EthicalReflector:
                 mode="unavailable",
                 fallback_reason="no_valid_citations",
                 raw_text=raw_analysis,
+                route="local",
             )
 
         parsed = _parse_analysis_sections(raw_analysis)
@@ -465,6 +535,7 @@ class EthicalReflector:
                 mode="unavailable",
                 fallback_reason=f"prohibited_content:{bad[:40]}",
                 raw_text=raw_analysis,
+                route="local",
             )
 
         return Reflection(
@@ -474,4 +545,33 @@ class EthicalReflector:
             open_questions=parsed["open_questions"],
             uncertainty=parsed["uncertainty"],
             raw_text=raw_analysis,
+            route="local",
         )
+
+    # ---- cloud path (single-shot, original prompt) -----------------------
+    def _reflect_cloud(self, ctx, values, limited):
+        """Return a Reflection on success, or None to trigger local fallback."""
+        try:
+            prompt = _build_prompt(ctx, values)
+            raw = self._cloud_backend.generate(
+                prompt,
+                max_tokens=600,
+                temperature=0.2,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+
+        result = _parse_reflection(raw, values, limited)
+        # Prohibited content -> fall back to local (safer answer)
+        if (
+            result.mode == "unavailable"
+            and result.fallback_reason
+            and result.fallback_reason.startswith("prohibited_content")
+        ):
+            return None
+        # "no_valid_citations" is a valid answer, not a failure
+        result.route = "cloud"
+        return result
