@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTextBrowser,
     QTextEdit,
@@ -119,7 +120,8 @@ class CloneChatDialog(QDialog):
                 parts.append(
                     f"<hr><p style='color:#6b4e00'>"
                     f"<b>SIMULATION</b> (artifact {aid[:8]}) "
-                    f"<a href='copy:{aid}'>[copy]</a></p>"
+                    f"<a href='copy:{aid}'>[copy]</a> "
+                    f"<a href='promote:{aid}'>[promote to memory]</a></p>"
                     f"<p>{_escape(item['text'])}</p>"
                 )
         self._feed.setHtml("".join(parts))
@@ -152,15 +154,69 @@ class CloneChatDialog(QDialog):
 
     def _on_link(self, url) -> None:
         s = url.toString()
-        if not s.startswith("copy:"):
+        if s.startswith("copy:"):
+            aid = s[5:]
+            for a in self._session.list_artifacts():
+                if a["artifact_id"] == aid:
+                    self._selected_artifact = a
+                    self._copy_btn.setEnabled(True)
+                    self._on_copy()
+                    return
+        elif s.startswith("promote:"):
+            self._on_promote(s[8:])
+
+    def _on_promote(self, artifact_id: str) -> None:
+        from shadow.agent.shadow_cloning import DuplicatePromotionError
+
+        art = next(
+            (
+                a
+                for a in self._session.list_artifacts()
+                if a["artifact_id"] == artifact_id
+            ),
+            None,
+        )
+        if art is None:
             return
-        aid = s[5:]
-        for a in self._session.list_artifacts():
-            if a["artifact_id"] == aid:
-                self._selected_artifact = a
-                self._copy_btn.setEnabled(True)
-                self._on_copy()
-                return
+
+        preview = art["text"][:200]
+        if len(art["text"]) > 200:
+            preview += "…"
+        confirm = QMessageBox.question(
+            self,
+            "Promote to memory",
+            f"Save this simulated output as a real note in your memory?\n\n"
+            f'"{preview}"\n\n'
+            "It will be marked 'promoted from a clone' in your memory and "
+            "will be searchable alongside your normal observations.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        try:
+            note_ref = self._session.promote(artifact_id, backend=self._backend)
+        except DuplicatePromotionError:
+            QMessageBox.information(
+                self,
+                "Already promoted",
+                "This output has already been promoted to your memory.",
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(
+                self,
+                "Promote failed",
+                f"Could not promote: {exc}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Promoted",
+            f"Saved as note #{note_ref}. It's now part of your memory.",
+        )
 
     def _on_copy(self) -> None:
         a = self._selected_artifact

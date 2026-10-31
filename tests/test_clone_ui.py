@@ -161,3 +161,62 @@ def test_list_dialog_shows_active_clone(manager, qtbot):
     qtbot.addWidget(dlg)
     assert dlg._list.count() == 1
     assert dlg._open_btn.isEnabled()
+
+
+# --- Promote UI ---
+def test_chat_dialog_promote_link_present(session, qtbot):
+    from shadow.ui.clone_chat_dialog import CloneChatDialog
+
+    backend = FakeBackend("sim out")
+    dlg = CloneChatDialog(session, backend)
+    qtbot.addWidget(dlg)
+    session.generate_reply(backend, "q")
+    dlg._render()
+    html = dlg._feed.toHtml()
+    assert "promote:" in html
+    assert "promote to memory" in html
+
+
+def test_chat_dialog_promote_rejection_no_write(session, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from shadow.ui.clone_chat_dialog import CloneChatDialog
+
+    backend = FakeBackend("sim out")
+    dlg = CloneChatDialog(session, backend)
+    qtbot.addWidget(dlg)
+    art = session.generate_reply(backend, "q")
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *a, **k: QMessageBox.No,
+    )
+    dlg._on_promote(art["artifact_id"])
+    cnt = session._manager._memory.conn.execute(
+        "SELECT COUNT(*) FROM observations WHERE source='shadow_clone_promote'"
+    ).fetchone()[0]
+    assert cnt == 0
+
+
+def test_chat_dialog_promote_acceptance_writes_note(session, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from shadow.ui.clone_chat_dialog import CloneChatDialog
+
+    backend = FakeBackend("sim out")
+    dlg = CloneChatDialog(session, backend)
+    qtbot.addWidget(dlg)
+    art = session.generate_reply(backend, "q")
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *a, **k: QMessageBox.Yes,
+    )
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    dlg._on_promote(art["artifact_id"])
+    cnt = session._manager._memory.conn.execute(
+        "SELECT COUNT(*) FROM observations WHERE source='shadow_clone_promote'"
+    ).fetchone()[0]
+    assert cnt == 1

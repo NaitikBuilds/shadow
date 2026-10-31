@@ -256,13 +256,3 @@ def test_startup_sweep_marks_active_rows_expired(memory):
     assert swept >= 1
     rows = memory.conn.execute("SELECT status FROM clone_sessions").fetchall()
     assert all(r[0] == "expired" for r in rows)
-
-
-# ---------------------------------------------------------------------------
-# Promote stub (C12)
-# ---------------------------------------------------------------------------
-def test_promote_raises_not_implemented(manager):
-    s = manager.create("x", {"time_range": {"start": "2026-10-01 00:00:00"}})
-    a = s.add_artifact("out")
-    with pytest.raises(NotImplementedError):
-        s.promote(a["artifact_id"])

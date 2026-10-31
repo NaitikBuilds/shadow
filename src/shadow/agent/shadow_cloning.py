@@ -143,6 +143,10 @@ def _min_iso(a: str | None, b: str | None) -> str | None:
     return a if a <= b else b
 
 
+class DuplicatePromotionError(Exception):
+    """Raised when an artifact has already been promoted (CLN-05)."""
+
+
 # ===========================================================================
 # CloneSession — one active clone
 # ===========================================================================
@@ -166,6 +170,7 @@ class CloneSession:
         scope: dict,
         include_values: bool,
         facade: CloneMemoryFacade,
+        manager: CloneManager,
     ) -> None:
         self.clone_id = clone_id
         self.name = name
@@ -174,6 +179,7 @@ class CloneSession:
         self.created_at = int(time.time() * 1000)
         self.ended_at: int | None = None
         self._status = "active"
+        self._manager = manager
 
         self._facade = facade
         self._ephemeral: MemoryStore | None = MemoryStore(":memory:")
@@ -312,9 +318,81 @@ class CloneSession:
         self._status = "expired"
         self.ended_at = int(time.time() * 1000)
 
-    def promote(self, artifact_id: str) -> int:
-        """Promote one artifact to primary memory. Lands in C12."""
-        raise NotImplementedError("promote() lands in C12")
+    def promote(self, artifact_id: str, backend=None) -> int:
+        """Promote one artifact to primary memory. Returns observation_id.
+
+        Per CLN-04: per-item, confirmed by the user in the UI.
+        Per CLN-05: rejects duplicate content_hash or (clone_id, artifact_id).
+        Per CLN-03: the note carries source='shadow_clone_promote' — the
+        source field IS the provenance marker.
+
+        Embedding is added best-effort if `backend` is provided; the note
+        exists (transactional) even when embedding fails.
+        """
+        if not self.is_active:
+            raise RuntimeError("clone session is not active")
+
+        artifact = next(
+            (a for a in self._artifacts if a["artifact_id"] == artifact_id),
+            None,
+        )
+        if artifact is None:
+            raise ValueError(f"artifact {artifact_id!r} not found in clone")
+
+        row = self._manager._memory.conn.execute(
+            "SELECT promotion_id FROM clone_promotions "
+            "WHERE content_hash = ? OR (clone_id = ? AND artifact_id = ?)",
+            (artifact["content_hash"], self.clone_id, artifact_id),
+        ).fetchone()
+        if row is not None:
+            raise DuplicatePromotionError(
+                f"artifact already promoted (promotion_id={row[0]})"
+            )
+
+        from datetime import datetime
+
+        provenance = {
+            "promoted_from": "shadow_clone",
+            "clone_id": self.clone_id,
+            "clone_name": self.name,
+            "artifact_id": artifact_id,
+            "content_hash": artifact["content_hash"],
+        }
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        with self._manager._memory.conn:
+            cur = self._manager._memory.conn.execute(
+                "INSERT INTO observations(timestamp, source, content, metadata) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    ts,
+                    "shadow_clone_promote",
+                    artifact["text"],
+                    json.dumps(provenance),
+                ),
+            )
+            note_ref = cur.lastrowid
+            self._manager._memory.conn.execute(
+                "INSERT INTO clone_promotions "
+                "(clone_id, artifact_id, content_hash, note_ref, promoted_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    self.clone_id,
+                    artifact_id,
+                    artifact["content_hash"],
+                    note_ref,
+                    int(time.time() * 1000),
+                ),
+            )
+
+        if backend is not None:
+            try:
+                vec = backend.embed(artifact["text"])
+                self._manager._memory.add_embedding(note_ref, vec)
+            except Exception:  # noqa: BLE001
+                pass
+
+        return note_ref
 
 
 # ===========================================================================
@@ -389,6 +467,7 @@ class CloneManager:
             scope=scope,
             include_values=include_values,
             facade=facade,
+            manager=self,
         )
         self._sessions[clone_id] = session
         return session
