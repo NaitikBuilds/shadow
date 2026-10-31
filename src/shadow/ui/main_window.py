@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -41,6 +42,8 @@ from shadow.agent import (
     detect_intent,
     wants_memory_context,
 )
+from shadow.agent.shadow_cloning import CloneManager
+from shadow.config import phase4_config
 from shadow.errors import ErrorReporter, Severity
 from shadow.memory import VisionExclusionStore
 from shadow.memory.retriever import ShadowRetriever
@@ -133,6 +136,23 @@ class MainWindow(QMainWindow):
         self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
         self.vision_exclusions = VisionExclusionStore(self.memory)
+
+        try:
+            self.clone_manager = CloneManager(
+                self.memory,
+                config=phase4_config(self.config),
+            )
+            self.clone_manager.startup_sweep()
+        except Exception as exc:  # noqa: BLE001
+            try:
+                self.reporter.silent(
+                    "clone",
+                    f"clone manager init failed: {exc}",
+                    exc=exc,
+                )
+            except Exception:
+                pass
+            self.clone_manager = None
 
         vcfg = self.config.get("vision") or {}
         self.vision_offer_policy = VisionOfferPolicy(
@@ -744,6 +764,10 @@ class MainWindow(QMainWindow):
         ethical_reflect_action.triggered.connect(self.open_ethical_reflection_dialog)
         settings_menu.addAction(ethical_reflect_action)
 
+        clones_action = QAction("Clones...", self)
+        clones_action.triggered.connect(self.open_clone_list)
+        settings_menu.addAction(clones_action)
+
         vision_action = settings_menu.addAction("Offer vision now")
         vision_action.triggered.connect(self._run_vision_now)
 
@@ -902,6 +926,19 @@ class MainWindow(QMainWindow):
             config=self.config,
             parent=self,
         )
+        dlg.exec()
+
+    def open_clone_list(self):
+        if self.clone_manager is None:
+            QMessageBox.information(
+                self,
+                "Clones unavailable",
+                "Clone Manager could not be initialized.",
+            )
+            return
+        from shadow.ui.clone_list_dialog import CloneListDialog
+
+        dlg = CloneListDialog(self.clone_manager, self.backend, parent=self)
         dlg.exec()
 
     def _maybe_show_first_run_ethical_wizard(self):

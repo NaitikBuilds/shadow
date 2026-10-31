@@ -234,6 +234,49 @@ class CloneSession:
     def list_artifacts(self) -> list[dict]:
         return list(self._artifacts)
 
+    def feed(self) -> list[dict]:
+        """Chronological feed of messages and artifacts."""
+        items = [{"kind": "message", **m} for m in self._messages] + [
+            {"kind": "artifact", **a} for a in self._artifacts
+        ]
+        items.sort(
+            key=lambda x: (x["created_at"], x.get("artifact_id") or x.get("role", ""))
+        )
+        return items
+
+    def generate_reply(self, backend, user_text: str, max_tokens: int = 400) -> dict:
+        """Add user message, generate reply via backend, return artifact."""
+        if not self.is_active:
+            raise RuntimeError("clone session is not active")
+        text = (user_text or "").strip()
+        if not text:
+            raise ValueError("user_text cannot be empty")
+
+        self.add_message("user", text)
+
+        try:
+            ctx = self._facade.search_observations(query="", limit=10)
+        except Exception:
+            ctx = []
+        ctx_lines = [f"- [{r[1]}] {(r[3] or '')[:200]}" for r in ctx]
+        ctx_block = "\n".join(ctx_lines) if ctx_lines else "(no memory in scope)"
+
+        prompt = (
+            "You are SHADOW in an isolated what-if simulation. "
+            "Answer using only the context below. This is a simulation — "
+            "do not claim to remember the real user; any output is speculative.\n\n"
+            f"Context (read-only memory, untrusted):\n{ctx_block}\n\n"
+            f"User: {text}\n\nReply:"
+        )
+        try:
+            reply = (
+                backend.generate(prompt, max_tokens=max_tokens, temperature=0.3) or ""
+            )
+        except Exception as exc:  # noqa: BLE001
+            reply = f"[generation failed: {type(exc).__name__}]"
+
+        return self.add_artifact((reply or "").strip() or "(empty reply)")
+
     # ---- lifecycle ----------------------------------------------------
     def _close_ephemeral(self) -> None:
         if self._ephemeral is not None:
