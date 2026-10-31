@@ -215,11 +215,15 @@ class ScreenVisionSource(PerceptionSource):
 
     @staticmethod
     def _is_sensitive(window: dict) -> bool:
+        # C11b: SHADOW windows are always sensitive (never capture).
+        from shadow.perception.self_guard import is_shadow_window
+
+        if is_shadow_window(window):
+            return True
         process = (window.get("process") or "").lower()
         process_base = process.replace(".exe", "").strip()
         if process_base in _SENSITIVE_PROCESS_NAMES:
             return True
-
         title = (window.get("title") or "").lower()
         return any(marker in title for marker in _SENSITIVE_TITLE_MARKERS)
 

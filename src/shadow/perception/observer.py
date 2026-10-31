@@ -223,6 +223,20 @@ class ObservationWorker(QThread):
             self.skipped.emit("idle", f"user idle > {self.pcfg['idle_skip_sec']}s")
             return
 
+        # C11b: never observe SHADOW's own windows. Sampling the active window
+        # once and short-circuiting saves UIA extraction + OCR + vision work.
+        try:
+            from shadow.perception.active_window import ActiveWindowSource
+            from shadow.perception.self_guard import is_shadow_window
+
+            _active = ActiveWindowSource().sample()
+            if _active is not None and is_shadow_window(_active):
+                self.skipped.emit("self_guard", "active window is SHADOW")
+                return
+        except Exception:  # noqa: BLE001
+            # Never block observation on a guard check failure.
+            pass
+
         run_ocr = (
             self.pcfg["ocr_every_n_ticks"] > 0
             and self._tick_count % self.pcfg["ocr_every_n_ticks"] == 0
@@ -255,6 +269,11 @@ class ObservationWorker(QThread):
             if not content:
                 if source.name == "screen_uia":
                     uia_thin = True
+                continue
+            # C11b: belt-and-braces — skip content that looks like SHADOW's UI.
+            from shadow.perception.self_guard import is_shadow_text
+
+            if is_shadow_text(content):
                 continue
             total_chars += len(content)
 
@@ -295,12 +314,10 @@ class ObservationWorker(QThread):
                 self._maybe_emit_visual_content(total_chars)
 
     def _content_from(self, source_name: str, payload: dict) -> str:
-        # Never observe ourselves.
-        process = (payload.get("process") or "").lower()
-        title = (payload.get("title") or "").lower()
-        if "python" in process and "shadow" in title:
-            return ""
-        if "shadow" in title and "silent on-device" in title:
+        # C11b: never observe SHADOW's own windows.
+        from shadow.perception.self_guard import is_shadow_window
+
+        if is_shadow_window(payload):
             return ""
         if source_name == "screen_ocr":
             text_lower = (payload.get("text") or "").lower()
