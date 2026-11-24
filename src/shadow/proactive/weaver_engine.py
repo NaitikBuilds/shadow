@@ -1,11 +1,16 @@
-"""Cross-Project Insight Weaver Engine (C13).
+"""Cross-Project Insight Weaver Engine (C13-C14).
 
 Surfaces non-obvious connections between distinct projects by analyzing
 the knowledge graph for semantic overlap and shared concepts.
+
+C13: Eligibility, exclusions, candidate generation
+C14: Provenance, dedupe, staleness, persistence
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -41,18 +46,27 @@ class CrossProjectInsight:
     """Stored insight with provenance."""
 
     insight_id: int
-    status: str  # 'new', 'saved', 'dismissed', 'cancelled'
+    status: str  # 'new', 'saved', 'dismissed', 'cancelled', 'stale'
     source_project: str
     target_project: str
     statement: str  # generated text
     created_at: int
+    updated_at: int
     evidence: dict  # {'source_evidence': [...], 'target_evidence': [...]}
+    evidence_hash: str
+    conflict_flag: int = 0
 
 
 class WeaverState(Enum):
     RUNNING = "running"
     COMPLETE = "complete"
     CANCELLED = "cancelled"
+
+
+class WeaverError(Exception):
+    """Weaver-specific errors."""
+
+    pass
 
 
 class WeaverEngine:
@@ -88,7 +102,9 @@ class WeaverEngine:
         # Check each project has recent activity
         now = int(time.time())
         lookback = self.cfg.get("weaver_state_days", 90) * 86400
-        return all(self._has_recent_activity(proj, now - lookback, now) for proj in projects)
+        return all(
+            self._has_recent_activity(proj, now - lookback, now) for proj in projects
+        )
 
     # -----------------------------------------------------------------------
     # Exclusions Handling
@@ -149,6 +165,245 @@ class WeaverEngine:
                             return candidates
 
         return candidates
+
+    # -----------------------------------------------------------------------
+    # C14: Provenance & Persistence
+    # -----------------------------------------------------------------------
+    def compute_evidence_hash(
+        self, source_evidence: list[int], target_evidence: list[int]
+    ) -> str:
+        """Compute SHA256 hash of normalized evidence for deduplication.
+
+        Normalizes by sorting observation IDs to ensure order-independent hashing.
+        """
+        normalized = {
+            "source": sorted(source_evidence),
+            "target": sorted(target_evidence),
+        }
+        payload = json.dumps(normalized, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()[:32]
+
+    def check_duplicate_insight(self, evidence_hash: str) -> int | None:
+        """Check if an insight with this evidence hash already exists.
+
+        Returns existing insight_id if found, None otherwise.
+        Implements AC-P4-WVR-03: no duplicate on re-run with same evidence.
+        """
+        cur = self.memory.conn.cursor()
+        cur.execute(
+            "SELECT insight_id FROM weaver_insights WHERE evidence_hash = ?",
+            (evidence_hash,),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    def get_observation_hashes(
+        self, observation_ids: list[int]
+    ) -> dict[int, tuple[str, str]]:
+        """Fetch content hashes and redacted snippets for observations.
+
+        Returns dict mapping observation_id -> (content_hash, snippet).
+        Snippet is truncated to 200 chars for privacy.
+        """
+        if not observation_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(observation_ids))
+        cur = self.memory.conn.cursor()
+        cur.execute(
+            f"SELECT id, content FROM observations WHERE id IN ({placeholders})",
+            tuple(observation_ids),
+        )
+
+        result = {}
+        for obs_id, content in cur.fetchall():
+            # Hash the full content
+            content_hash = hashlib.sha256(content.encode()).hexdigest()[:32]
+            # Redacted snippet (first 200 chars)
+            snippet = content[:200]
+            result[obs_id] = (content_hash, snippet)
+        return result
+
+    def check_staleness(self, insight_id: int) -> bool:
+        """Check if any source observations for an insight have been deleted.
+
+        Implements AC-P4-WVR-09: source deleted → status=stale.
+        Uses weaver_insight_sources as the source of truth - if a source record
+        was deleted via CASCADE (observation deleted), the insight is stale.
+        """
+        cur = self.memory.conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM weaver_insight_sources WHERE insight_id = ?",
+            (insight_id,),
+        )
+        source_count = cur.fetchone()[0]
+
+        # Get expected count from weaver_insights.evidence
+        cur.execute(
+            "SELECT evidence FROM weaver_insights WHERE insight_id = ?",
+            (insight_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return False
+
+        import json
+
+        evidence = json.loads(row[0])
+        expected_count = len(evidence.get("source_evidence", [])) + len(
+            evidence.get("target_evidence", [])
+        )
+
+        # If source records were deleted (CASCADE), count will be less than expected
+        return source_count < expected_count
+
+    def detect_conflicting_evidence(
+        self, source_evidence: list[int], target_evidence: list[int]
+    ) -> int:
+        """Detect if evidence sources contradict each other.
+
+        For now, a simple heuristic: if source and target have overlapping
+        observation IDs (shouldn't happen normally), flag as conflict.
+        Implements AC-P4-WVR-10: conflicting evidence shows both sources.
+        """
+        src_set = set(source_evidence)
+        tgt_set = set(target_evidence)
+        return 1 if src_set & tgt_set else 0
+
+    def record_insight_with_provenance(
+        self,
+        candidate: InsightCandidate,
+        statement: str,
+        status: str = "new",
+    ) -> int:
+        """Persist an insight with full provenance to weaver_insights and weaver_insight_sources.
+
+        Implements:
+        - AC-P4-WVR-01: Insight with >=2 sources from 2 projects
+        - AC-P4-WVR-02: Candidate from one project only → no insight (handled upstream)
+        - AC-P4-WVR-03: Deduplication via evidence_hash
+        - AC-P4-WVR-08: No insight text in observations/KG (provenance links only)
+        - AC-P4-WVR-09: Staleness tracked via weaver_insight_sources
+        - AC-P4-WVR-10: Conflict flag on contradictory evidence
+        - AC-P4-WVR-13: Evidence tagged as untrusted source
+        """
+        # Compute evidence hash for dedup
+        evidence_hash = self.compute_evidence_hash(
+            candidate.source_evidence, candidate.target_evidence
+        )
+
+        # Check for duplicate (AC-P4-WVR-03)
+        existing_id = self.check_duplicate_insight(evidence_hash)
+        if existing_id is not None:
+            return existing_id
+
+        # Detect conflicting evidence (AC-P4-WVR-10)
+        conflict_flag = self.detect_conflicting_evidence(
+            candidate.source_evidence, candidate.target_evidence
+        )
+
+        # Verify we have evidence from BOTH projects (AC-P4-WVR-01, AC-P4-WVR-02)
+        if not candidate.source_evidence or not candidate.target_evidence:
+            raise WeaverError("Insight requires evidence from both projects")
+
+        now = int(time.time())
+
+        # Start transaction
+        cur = self.memory.conn.cursor()
+
+        try:
+            # Insert main insight record
+            cur.execute(
+                """
+                INSERT INTO weaver_insights
+                (status, source_project, target_project, statement, created_at, updated_at, evidence, evidence_hash, conflict_flag)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    status,
+                    candidate.source_project,
+                    candidate.target_project,
+                    statement,
+                    now,
+                    now,
+                    json.dumps(
+                        {
+                            "source_evidence": candidate.source_evidence,
+                            "target_evidence": candidate.target_evidence,
+                        }
+                    ),
+                    evidence_hash,
+                    conflict_flag,
+                ),
+            )
+            insight_id = cur.lastrowid
+
+            # Insert provenance records with hashes and snippets
+            all_evidence = candidate.source_evidence + candidate.target_evidence
+            obs_hashes = self.get_observation_hashes(all_evidence)
+
+            for obs_id in all_evidence:
+                content_hash, snippet = obs_hashes.get(obs_id, ("", ""))
+                # Determine which project this observation belongs to
+                project = candidate.source_project if obs_id in candidate.source_evidence else candidate.target_project
+
+                # Check if observation source is untrusted (AC-P4-WVR-13)
+                cur.execute(
+                    "SELECT source FROM observations WHERE id = ?", (obs_id,)
+                )
+                row = cur.fetchone()
+                is_untrusted = 0
+                if row and row[0] in ("injected", "untrusted"):
+                    is_untrusted = 1
+
+                cur.execute(
+                    """
+                    INSERT INTO weaver_insight_sources
+                    (insight_id, observation_id, project_name, evidence_hash, snippet, is_untrusted, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        insight_id,
+                        obs_id,
+                        project,
+                        content_hash,
+                        snippet,
+                        is_untrusted,
+                        now,
+                    ),
+                )
+
+            self.memory.conn.commit()
+            return insight_id
+
+        except Exception:
+            self.memory.conn.rollback()
+            raise
+
+    def mark_stale_insights(self) -> int:
+        """Scan all non-stale insights and mark stale ones.
+
+        Returns count of insights marked stale.
+        Implements AC-P4-WVR-09.
+        """
+        cur = self.memory.conn.cursor()
+        cur.execute(
+            "SELECT insight_id FROM weaver_insights WHERE status NOT IN ('stale', 'cancelled')"
+        )
+        insight_ids = [row[0] for row in cur.fetchall()]
+
+        stale_count = 0
+        for insight_id in insight_ids:
+            if self.check_staleness(insight_id):
+                cur.execute(
+                    "UPDATE weaver_insights SET status = 'stale', updated_at = ? WHERE insight_id = ?",
+                    (int(time.time()), insight_id),
+                )
+                stale_count += 1
+
+        if stale_count:
+            self.memory.conn.commit()
+        return stale_count
 
     # -----------------------------------------------------------------------
     # Internal Helpers
@@ -299,7 +554,7 @@ class WeaverEngine:
             self._state = WeaverState.COMPLETE
 
     def record_insight(self, insight: CrossProjectInsight) -> int:
-        """Persist an insight to the weaver_insights table."""
+        """Persist an insight to the weaver_insights table (legacy API)."""
         cur = self.memory.conn.cursor()
         cur.execute(
             """

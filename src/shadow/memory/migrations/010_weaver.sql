@@ -1,5 +1,5 @@
 -- 010_weaver.sql
--- Schema for Cross-Project Insight Weaver
+-- Schema for Cross-Project Insight Weaver (C13: eligibility, exclusions, candidate generation)
 -- Migration version 10
 PRAGMA foreign_keys = ON;
 
