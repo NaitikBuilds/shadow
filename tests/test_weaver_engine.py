@@ -727,3 +727,418 @@ class TestTransactionRollback:
         assert cur.fetchone()[0] == 0
         cur.execute("SELECT COUNT(*) FROM weaver_insight_sources")
         assert cur.fetchone()[0] == 0
+
+
+# ============================================================================
+# C15: Insight Retrieval & Status Management
+# ============================================================================
+
+
+class TestInsightRetrieval:
+    """Tests for C15: get_insights, get_dismissed_insights."""
+
+    def test_get_insights_default_filters_stale_cancelled(self, tmp_db_path):
+        """Default get_insights excludes stale and cancelled."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        # Create one insight
+        _ = engine.record_insight_with_provenance(candidate, "New insight")
+
+        # Manually insert additional insights with different statuses to test filtering
+        cur = memory.conn.cursor()
+        # Insert cancelled
+        cur.execute(
+            """
+            INSERT INTO weaver_insights
+            (status, source_project, target_project, statement, created_at, updated_at, evidence, evidence_hash, conflict_flag)
+            VALUES ('cancelled', 'alpha', 'beta', 'Cancelled insight', ?, ?, '{}', 'hash_cancelled', 0)
+            """,
+            (int(datetime.datetime.now().timestamp()), int(datetime.datetime.now().timestamp())),
+        )
+        # Insert stale
+        cur.execute(
+            """
+            INSERT INTO weaver_insights
+            (status, source_project, target_project, statement, created_at, updated_at, evidence, evidence_hash, conflict_flag)
+            VALUES ('stale', 'alpha', 'beta', 'Stale insight', ?, ?, '{}', 'hash_stale', 0)
+            """,
+            (int(datetime.datetime.now().timestamp()), int(datetime.datetime.now().timestamp())),
+        )
+        # Insert saved
+        cur.execute(
+            """
+            INSERT INTO weaver_insights
+            (status, source_project, target_project, statement, created_at, updated_at, evidence, evidence_hash, conflict_flag)
+            VALUES ('saved', 'alpha', 'beta', 'Saved insight', ?, ?, '{}', 'hash_saved', 0)
+            """,
+            (int(datetime.datetime.now().timestamp()), int(datetime.datetime.now().timestamp())),
+        )
+        memory.conn.commit()
+
+        # Default should only return 'new' and 'saved'
+        insights = engine.get_insights()
+        statuses = {i.status for i in insights}
+        assert statuses == {"new", "saved"}
+
+        # With include_stale=True
+        insights = engine.get_insights(include_stale=True)
+        statuses = {i.status for i in insights}
+        assert "stale" in statuses
+        assert "new" in statuses
+        assert "saved" in statuses
+        assert "cancelled" not in statuses  # cancelled still excluded
+
+    def test_get_dismissed_insights(self, tmp_db_path):
+        """get_dismissed_insights returns only dismissed insights."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        id1 = engine.record_insight_with_provenance(candidate, "Insight 1")
+        _ = engine.record_insight_with_provenance(candidate, "Insight 2")  # dedup, same ID
+
+        # Dismiss one
+        engine.dismiss_insight(id1)
+
+        # Need different evidence to avoid dedup
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content3')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content4')",
+            (now_str,),
+        )
+        memory.conn.commit()
+        candidate3 = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[3],
+            target_evidence=[4],
+        )
+        id3 = engine.record_insight_with_provenance(candidate3, "Insight 3")
+        engine.dismiss_insight(id3)
+
+        dismissed = engine.get_dismissed_insights()
+        assert len(dismissed) == 2
+        assert all(i.status == "dismissed" for i in dismissed)
+
+
+class TestInsightStatusManagement:
+    """Tests for C15: dismiss, save, restore, cancel."""
+
+    def test_dismiss_insight(self, tmp_db_path):
+        """Dismiss moves insight to dismissed status."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        insight_id = engine.record_insight_with_provenance(candidate, "Test insight")
+
+        # Dismiss
+        result = engine.dismiss_insight(insight_id)
+        assert result is True
+
+        # Verify status changed
+        cur = memory.conn.cursor()
+        cur.execute("SELECT status FROM weaver_insights WHERE insight_id = ?", (insight_id,))
+        assert cur.fetchone()[0] == "dismissed"
+
+        # Verify it appears in dismissed list
+        dismissed = engine.get_dismissed_insights()
+        assert len(dismissed) == 1
+        assert dismissed[0].insight_id == insight_id
+
+    def test_save_insight(self, tmp_db_path):
+        """Save marks insight as saved (stays in active)."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        insight_id = engine.record_insight_with_provenance(candidate, "Test insight")
+
+        # Save
+        result = engine.save_insight(insight_id)
+        assert result is True
+
+        # Verify status changed
+        cur = memory.conn.cursor()
+        cur.execute("SELECT status FROM weaver_insights WHERE insight_id = ?", (insight_id,))
+        assert cur.fetchone()[0] == "saved"
+
+        # Verify it appears in active (default) list
+        active = engine.get_insights()
+        assert any(i.insight_id == insight_id for i in active)
+
+    def test_restore_insight(self, tmp_db_path):
+        """Restore moves dismissed insight back to new (active)."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        insight_id = engine.record_insight_with_provenance(candidate, "Test insight")
+
+        # Dismiss first
+        engine.dismiss_insight(insight_id)
+        assert engine.get_insights() == []  # Not in active
+
+        # Restore
+        result = engine.restore_insight(insight_id)
+        assert result is True
+
+        # Verify status is 'new' (active)
+        cur = memory.conn.cursor()
+        cur.execute("SELECT status FROM weaver_insights WHERE insight_id = ?", (insight_id,))
+        assert cur.fetchone()[0] == "new"
+
+        # Verify it appears in active list
+        active = engine.get_insights()
+        assert len(active) == 1
+        assert active[0].insight_id == insight_id
+
+    def test_cancel_insight(self, tmp_db_path):
+        """Cancel permanently removes insight from all views."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        insight_id = engine.record_insight_with_provenance(candidate, "Test insight")
+
+        # Cancel
+        result = engine.cancel_insight(insight_id)
+        assert result is True
+
+        # Verify status is cancelled
+        cur = memory.conn.cursor()
+        cur.execute("SELECT status FROM weaver_insights WHERE insight_id = ?", (insight_id,))
+        assert cur.fetchone()[0] == "cancelled"
+
+        # Verify it doesn't appear in any list
+        assert engine.get_insights() == []
+        assert engine.get_dismissed_insights() == []
+
+    def test_invalid_status_raises_error(self, tmp_db_path):
+        """Invalid status raises WeaverError."""
+        memory = MemoryStore(str(tmp_db_path))
+        engine = WeaverEngine(memory, {"phase4": {"weaver_enabled": True}})
+
+        import datetime
+
+        now_str = datetime.datetime.now().isoformat()
+
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'alpha')")
+        memory.conn.execute("INSERT INTO entities (type, name) VALUES ('project', 'beta')")
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observations (timestamp, source, content) VALUES (?, 'test', 'content')",
+            (now_str,),
+        )
+        memory.conn.execute(
+            "INSERT INTO observation_entities (observation_id, entity_id) VALUES (1, 1), (2, 2)"
+        )
+        memory.conn.commit()
+
+        from shadow.proactive.weaver_engine import InsightCandidate, WeaverError
+
+        candidate = InsightCandidate(
+            source_project="alpha",
+            target_project="beta",
+            source_entity=1,
+            target_entity=2,
+            similarity=0.8,
+            source_evidence=[1],
+            target_evidence=[2],
+        )
+
+        insight_id = engine.record_insight_with_provenance(candidate, "Test insight")
+
+        with pytest.raises(WeaverError, match="Invalid status"):
+            engine.update_insight_status(insight_id, "invalid_status")

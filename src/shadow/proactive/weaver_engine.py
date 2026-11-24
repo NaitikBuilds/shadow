@@ -573,3 +573,96 @@ class WeaverEngine:
         )
         self.memory.conn.commit()
         return cur.lastrowid
+
+    # -----------------------------------------------------------------------
+    # C15: Insight Retrieval & Status Management
+    # -----------------------------------------------------------------------
+    def get_insights(
+        self, status_filter: list[str] | None = None, include_stale: bool = False
+    ) -> list[CrossProjectInsight]:
+        """Fetch insights from weaver_insights table.
+
+        Args:
+            status_filter: List of statuses to include. Default: ['new', 'saved'].
+            include_stale: If True, also include 'stale' insights.
+        """
+        if status_filter is None:
+            status_filter = ["new", "saved"]
+
+        if include_stale and "stale" not in status_filter:
+            status_filter = status_filter + ["stale"]
+        elif not include_stale:
+            status_filter = [s for s in status_filter if s != "stale"]
+
+        placeholders = ",".join("?" * len(status_filter))
+        query = f"""
+            SELECT insight_id, status, source_project, target_project, statement,
+                   created_at, updated_at, evidence, evidence_hash, conflict_flag
+            FROM weaver_insights
+            WHERE status IN ({placeholders})
+            ORDER BY created_at DESC
+        """
+
+        cur = self.memory.conn.cursor()
+        cur.execute(query, tuple(status_filter))
+        rows = cur.fetchall()
+
+        insights = []
+        for row in rows:
+            insights.append(
+                CrossProjectInsight(
+                    insight_id=row[0],
+                    status=row[1],
+                    source_project=row[2],
+                    target_project=row[3],
+                    statement=row[4],
+                    created_at=row[5],
+                    updated_at=row[6],
+                    evidence=json.loads(row[7]) if row[7] else {},
+                    evidence_hash=row[8],
+                    conflict_flag=row[9] or 0,
+                )
+            )
+        return insights
+
+    def get_dismissed_insights(self) -> list[CrossProjectInsight]:
+        """Fetch dismissed insights for the Dismissed tab."""
+        return self.get_insights(status_filter=["dismissed"], include_stale=True)
+
+    def update_insight_status(self, insight_id: int, new_status: str) -> bool:
+        """Update an insight's status (dismiss, save, restore, cancel).
+
+        Args:
+            insight_id: The insight to update.
+            new_status: One of 'new', 'saved', 'dismissed', 'cancelled'.
+
+        Returns:
+            True if updated, False if not found.
+        """
+        valid_statuses = {"new", "saved", "dismissed", "cancelled", "stale"}
+        if new_status not in valid_statuses:
+            raise WeaverError(f"Invalid status: {new_status}")
+
+        cur = self.memory.conn.cursor()
+        cur.execute(
+            "UPDATE weaver_insights SET status = ?, updated_at = ? WHERE insight_id = ?",
+            (new_status, int(time.time()), insight_id),
+        )
+        self.memory.conn.commit()
+        return cur.rowcount > 0
+
+    def dismiss_insight(self, insight_id: int) -> bool:
+        """Mark an insight as dismissed (moves to Dismissed tab)."""
+        return self.update_insight_status(insight_id, "dismissed")
+
+    def save_insight(self, insight_id: int) -> bool:
+        """Mark an insight as saved (keeps in active view)."""
+        return self.update_insight_status(insight_id, "saved")
+
+    def restore_insight(self, insight_id: int) -> bool:
+        """Restore a dismissed insight back to active (new)."""
+        return self.update_insight_status(insight_id, "new")
+
+    def cancel_insight(self, insight_id: int) -> bool:
+        """Cancel an insight permanently."""
+        return self.update_insight_status(insight_id, "cancelled")

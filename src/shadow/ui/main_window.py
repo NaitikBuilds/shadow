@@ -54,6 +54,7 @@ from shadow.perception import (
     VisionHotkeys,
 )
 from shadow.perception.region_analysis import RegionAnalysisWorker
+from shadow.proactive.weaver_engine import WeaverEngine
 from shadow.ui.ambient_panel import AmbientPanel
 from shadow.ui.cloud_panel import CloudPanel
 from shadow.ui.consent_panel import ConsentPanel  # NEW in Commit 3
@@ -73,6 +74,7 @@ from shadow.ui.vision_cloud_preview import (
 from shadow.ui.vision_cloud_settings import VisionCloudSettingsPanel
 from shadow.ui.vision_consent import VisionConsent, VisionConsentDialog
 from shadow.ui.vision_popup import VisionPopup
+from shadow.ui.weaver_insight_panel import WeaverInsightPanel
 
 
 class InferenceWorker(QThread):
@@ -136,6 +138,7 @@ class MainWindow(QMainWindow):
         self.stuck_detector = StuckDetector(self.memory, self.config)
         self.reporter = reporter
         self.vision_exclusions = VisionExclusionStore(self.memory)
+        self.weaver_engine = WeaverEngine(self.memory, self.config)
 
         try:
             self.clone_manager = CloneManager(
@@ -747,6 +750,9 @@ class MainWindow(QMainWindow):
         insights_action = settings_menu.addAction("Insights…")
         insights_action.triggered.connect(self.open_insights_panel)
 
+        weaver_insights_action = settings_menu.addAction("Weaver Insights…")
+        weaver_insights_action.triggered.connect(self.open_weaver_insights_panel)
+
         ambient_action = settings_menu.addAction("Working On…")
         ambient_action.triggered.connect(self.open_ambient_panel)
 
@@ -840,6 +846,18 @@ class MainWindow(QMainWindow):
             focus_shield=self.focus_shield,
             feedback=self.feedback,
         )
+        layout.addWidget(panel)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+        dlg.exec()
+
+    def open_weaver_insights_panel(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("SHADOW — Weaver Insights")
+        dlg.resize(640, 680)
+        layout = QVBoxLayout(dlg)
+        panel = WeaverInsightPanel(self.weaver_engine, self.feedback)
         layout.addWidget(panel)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dlg.accept)
